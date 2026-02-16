@@ -42,6 +42,8 @@ class TransformersTranslationBackend:
     model_id: str
     device: int
     max_new_tokens: int
+    source_lang_code: str | None
+    target_lang_code: str | None
     name: str = "transformers"
 
     def translate_batch(
@@ -52,37 +54,57 @@ class TransformersTranslationBackend:
         target_language: str,
         batch_size: int,
     ) -> list[str]:
-        del source_language, target_language
         if not texts:
             return []
 
         try:
-            from transformers import pipeline  # Imported lazily.
+            import torch
+            from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
         except ImportError as exc:
             raise RuntimeError(
                 "Transformers backend requires 'transformers', 'sentencepiece', and 'torch'. "
                 "Install with: pip install transformers sentencepiece torch"
             ) from exc
 
-        translator = pipeline(
-            task="translation",
-            model=self.model_id,
-            tokenizer=self.model_id,
-            device=self.device,
-        )
-        results = translator(
-            texts,
-            batch_size=batch_size,
-            max_new_tokens=self.max_new_tokens,
-            clean_up_tokenization_spaces=True,
-        )
-        output: list[str] = []
-        for item in results:
-            if not isinstance(item, dict):
-                raise ValueError("Unexpected translation output shape from transformers pipeline.")
-            translated = item.get("translation_text")
-            output.append(str(translated).strip())
-        return output
+        tokenizer = AutoTokenizer.from_pretrained(self.model_id)
+        model = AutoModelForSeq2SeqLM.from_pretrained(self.model_id)
+
+        source_lang = self.source_lang_code or source_language
+        target_lang = self.target_lang_code or target_language
+
+        forced_bos_token_id: int | None = None
+        if hasattr(tokenizer, "lang_code_to_id") and isinstance(tokenizer.lang_code_to_id, dict):
+            if source_lang in tokenizer.lang_code_to_id and hasattr(tokenizer, "src_lang"):
+                tokenizer.src_lang = source_lang
+            if target_lang in tokenizer.lang_code_to_id:
+                forced_bos_token_id = int(tokenizer.lang_code_to_id[target_lang])
+        elif hasattr(tokenizer, "get_lang_id"):
+            get_lang_id = getattr(tokenizer, "get_lang_id")
+            if callable(get_lang_id):
+                try:
+                    forced_bos_token_id = int(get_lang_id(target_lang))
+                    if hasattr(tokenizer, "src_lang"):
+                        tokenizer.src_lang = source_lang
+                except Exception:
+                    forced_bos_token_id = None
+
+        if self.device >= 0 and torch.cuda.is_available():
+            model = model.to(f"cuda:{self.device}")
+        else:
+            model = model.to("cpu")
+
+        outputs: list[str] = []
+        for start in range(0, len(texts), batch_size):
+            batch = texts[start : start + batch_size]
+            encoded = tokenizer(batch, return_tensors="pt", padding=True, truncation=True)
+            encoded = {key: value.to(model.device) for key, value in encoded.items()}
+            generate_kwargs = {"max_new_tokens": self.max_new_tokens}
+            if forced_bos_token_id is not None:
+                generate_kwargs["forced_bos_token_id"] = forced_bos_token_id
+            generated = model.generate(**encoded, **generate_kwargs)
+            decoded = tokenizer.batch_decode(generated, skip_special_tokens=True)
+            outputs.extend(text.strip() for text in decoded)
+        return outputs
 
 
 def build_translation_backend(config: TranslateConfig) -> TranslationBackend:
@@ -94,6 +116,8 @@ def build_translation_backend(config: TranslateConfig) -> TranslationBackend:
             model_id=config.transformers.model_id,
             device=config.transformers.device,
             max_new_tokens=config.transformers.max_new_tokens,
+            source_lang_code=config.transformers.source_lang_code,
+            target_lang_code=config.transformers.target_lang_code,
         )
     raise ValueError(
         f"Unsupported translation backend '{config.backend}'. "

@@ -29,6 +29,12 @@ Proje M1 uygulama asamasini buyuk oranda tamamladi ve M2 ilk calisir ceviri akis
 - GTX1650 + i5-12500H profil config eklendi (`configs/profiles/gtx1650_i5_12500h.toml`).
 - Doctor kapsami M2 bagimliliklarini da kontrol edecek sekilde genisletildi.
 - GTX1650 profili icin `transformers/sentencepiece/torch` kurulumu yapildi ve doctor gecildi.
+- M2 hizlandirma eklendi: tekrar eden source segmentler dedup + reuse.
+- M2 calisma manifesti eklendi (`run_m2_manifest.json`) - timing/speed metrikleri.
+- GTX1650 hiz profili eklendi (`configs/profiles/gtx1650_fast.toml`).
+- M2 benchmark komutu eklendi (`benchmark-m2`).
+- M2 benchmark raporu eklendi (`benchmarks/m2_profile_benchmark.json`).
+- M2 transformer backend `facebook/m2m100_418M` modeline guncellendi.
 - M1 milestone dokumani olusturuldu.
 - M2 milestone dokumani baslatildi.
 - Temel birim testleri genisletildi ve gecti.
@@ -46,9 +52,9 @@ Proje M1 uygulama asamasini buyuk oranda tamamladi ve M2 ilk calisir ceviri akis
 - M2 kalite kontrollerini eklemek.
 
 ## Tamamlama Tahmini (2026-02-16)
-- Genel tamamlanma: `%42` (tahmini)
+- Genel tamamlanma: `%48` (tahmini)
 - `M1`: `%90` (donanim fallback dahil, gercek video entegrasyon calistirmasi eksik)
-- `M2`: `%56` (giris/cikti/QA + glossary + donanim profili var, kalite tuning ve saha dogrulamasi eksik)
+- `M2`: `%68` (benchmark otomasyonu dahil, gercek kalite tuning ve saha dogrulamasi eksik)
 - `M3`: `%0`
 - `M4`: `%0`
 - `M5`: `%0`

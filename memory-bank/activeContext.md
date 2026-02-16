@@ -1,7 +1,7 @@
 # Active Context
 
 ## Mevcut Odak
-Donanim uyumu guclendirildi (GTX1650). Simdi odak gercek model kalite tuning ve uc uca dogrulama.
+Hiz/kalite karsilastirma otomasyonu eklendi. Simdi odak gercek video uzerinde profil secimini netlestirmek.
 
 ## Son Degisiklikler
 - M1 kod tabani olusturuldu (`src/video_translate`).
@@ -28,6 +28,12 @@ Donanim uyumu guclendirildi (GTX1650). Simdi odak gercek model kalite tuning ve 
 - GTX1650 + i5-12500H icin profil config eklendi (`configs/profiles/gtx1650_i5_12500h.toml`).
 - Doctor M2 bagimlilik kontrolu eklendi (`transformers/sentencepiece/torch`).
 - GTX1650 profil bagimliliklari kuruldu ve doctor dogrulamasi basarili.
+- M2 hizlandirma: tekrar eden kaynak segmentleri tek sefer cevirme (dedup reuse).
+- M2 calisma manifesti eklendi (`run_m2_manifest.json`) - hiz ve sure metrikleri.
+- GTX1650 icin hiz odakli ikinci profil eklendi (`configs/profiles/gtx1650_fast.toml`).
+- `benchmark-m2` komutu eklendi (profil bazli karsilastirma).
+- Benchmark raporu eklendi (`benchmarks/m2_profile_benchmark.json`).
+- M2 transformers modeli `facebook/m2m100_418M` olarak guncellendi.
 - M1 dokumani eklendi (`docs/milestones/m1.md`).
 - M2 dokumani baslatildi (`docs/milestones/m2.md`).
 - Temel birim testleri genisletildi ve gecti.
@@ -43,6 +49,7 @@ Donanim uyumu guclendirildi (GTX1650). Simdi odak gercek model kalite tuning ve 
 - Ornek transcript kalitesini inceleyip M2 ceviri katmani icin segment stratejisini netlestirmek.
 - M2 `transformers` backend ile kalite tune etmek (model, batch, token ayarlari).
 - M2 kaliteyi gercek veriyle olcup sozluk icerigini alan bazli iyilestirmek.
+- M2 `run_m2_manifest.json` metrikleriyle profil bazli hiz karsilastirmasi yapmak.
 
 ## Dikkat Notlari
 - Senkron hedefi yuksek, fakat lip reading kullanilmayacak.

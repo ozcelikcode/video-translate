@@ -39,8 +39,13 @@
 - On kontrol: `doctor` komutu ile yerel bagimlilik denetimi
 - M2 hazirlik: `prepare-m2` ile ceviri giris sozlesmesi uretimi
 - M2 calistirma: `run-m2` ile ceviri cikti + QA uretimi
+- M2 benchmark: `benchmark-m2` ile profil karsilastirma
 - M2 glossary: `configs/glossary.en-tr.json` (kaynak terim -> hedef terim)
 - M2 QA: terminal noktalama ve glossary eslesme metrikleri
 - Donanim profili: `configs/profiles/gtx1650_i5_12500h.toml`
+- Donanim hiz profili: `configs/profiles/gtx1650_fast.toml`
 - ASR fallback: GPU OOM algilanirsa CPU (`int8`) fallback
 - Doctor kontrolu: `transformers/sentencepiece/torch` bagimliliklarini da denetler
+- M2 run manifest: `run_m2_manifest.json` icinde hiz/sure olcumleri
+- Benchmark raporu: `benchmarks/m2_profile_benchmark.json`
+- M2 varsayilan model: `facebook/m2m100_418M`

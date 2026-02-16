@@ -55,9 +55,17 @@ Run M2 translation:
 video-translate run-m2 --run-root runs/m1_YYYYMMDD_HHMMSS
 ```
 
+Benchmark M2 profiles on the same input:
+
+```bash
+video-translate benchmark-m2 --run-root runs/m1_YYYYMMDD_HHMMSS
+```
+
 M2 outputs:
 - `output/translate/translation_output.en-tr.json`
 - `output/qa/m2_qa_report.json`
+- `run_m2_manifest.json` (speed + timing stats)
+- `benchmarks/m2_profile_benchmark.json` (multi-profile comparison)
 
 For real local model translation, set `translate.backend = "transformers"` in config
 and install optional deps:
@@ -68,9 +76,17 @@ pip install -e .[m2]
 
 M2 supports optional glossary enforcement via `translate.glossary_path`
 and reports terminology + punctuation metrics in `m2_qa_report.json`.
+M2 also reuses repeated source segments to reduce translation time.
 
 ASR has automatic OOM fallback. If GPU memory is insufficient, the pipeline
 retries on CPU using fallback ASR settings from config.
+
+Fast profile for GTX 1650:
+
+```bash
+video-translate run-m1 --url "https://www.youtube.com/watch?v=VIDEO_ID" --config configs/profiles/gtx1650_fast.toml
+video-translate run-m2 --run-root runs/m1_YYYYMMDD_HHMMSS --config configs/profiles/gtx1650_fast.toml
+```
 
 ## Optional Flags
 

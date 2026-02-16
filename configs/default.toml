@@ -34,6 +34,8 @@ apply_glossary_postprocess = true
 qa_check_terminal_punctuation = true
 
 [translate.transformers]
-model_id = "Helsinki-NLP/opus-mt-en-tr"
+model_id = "facebook/m2m100_418M"
 device = -1
 max_new_tokens = 256
+source_lang_code = "en"
+target_lang_code = "tr"

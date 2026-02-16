@@ -34,16 +34,27 @@ Pipeline tabanli, moduler, asamali genisletilebilir bir mimari.
 - Ceviri backend secimi: `translate.backends.build_translation_backend`
 - Desteklenen backendler: `mock`, `transformers`
 - Glossary yukleme ve ceviri sonrasi terim duzeltme: `translate.glossary`
+- Hiz optimizasyonu: tekrar eden source segmentleri icin dedup + reuse
 - Cikti: `output/translate/translation_output.en-tr.json`
 - QA: `qa.m2_report.build_m2_qa_report`
 - QA cikti: `output/qa/m2_qa_report.json`
 - M2 QA kapsami: uzunluk orani + terminal noktalama + glossary terim eslesmesi
+- M2 calisma manifesti: `run_m2_manifest.json` (timing + speed alanlari)
+
+## M2 Benchmark Akisi
+- `cli.benchmark-m2` -> `pipeline.m2_benchmark.run_m2_profile_benchmark`
+- Ayni translation input uzerinde coklu profil calistirma
+- Cikti: `benchmarks/m2_profile_benchmark.json`
+- Rapor: profil bazli status + sure + kalite flag + onerilen profil
 
 ## Donanim Profili
 - GTX1650 + i5-12500H + 16GB RAM icin profil:
   - `configs/profiles/gtx1650_i5_12500h.toml`
   - ASR: `small` + `cuda` + `int8_float16` + OOM fallback
   - M2: `transformers` backend, CPU ceviri (`device=-1`) ile stabil calisma
+- GTX1650 hiz profili:
+  - `configs/profiles/gtx1650_fast.toml`
+  - ASR beam ve token ayarlari hiz odakli
 - Doctor: profilde `transformers` backend seciliyse M2 Python bagimliliklarini dogrular
 
 ## Tasarim Prensipleri

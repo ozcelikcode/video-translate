@@ -49,6 +49,8 @@ def _build_app_config() -> AppConfig:
                 model_id="Helsinki-NLP/opus-mt-en-tr",
                 device=-1,
                 max_new_tokens=256,
+                source_lang_code=None,
+                target_lang_code=None,
             ),
         ),
     )
@@ -66,7 +68,7 @@ def test_run_m2_pipeline_with_mock_backend(tmp_path: Path) -> None:
                 "source_language": "en",
                 "target_language": "tr",
                 "segment_count": 2,
-                "total_source_word_count": 6,
+                "total_source_word_count": 4,
                 "segments": [
                     {
                         "id": 0,
@@ -81,8 +83,8 @@ def test_run_m2_pipeline_with_mock_backend(tmp_path: Path) -> None:
                         "start": 3.0,
                         "end": 5.0,
                         "duration": 2.0,
-                        "source_text": "this is a test",
-                        "source_word_count": 4,
+                        "source_text": "hello world",
+                        "source_word_count": 2,
                     },
                 ],
             }
@@ -92,17 +94,20 @@ def test_run_m2_pipeline_with_mock_backend(tmp_path: Path) -> None:
 
     output_json = tmp_path / "output" / "translate" / "translation_output.en-tr.json"
     qa_report_json = tmp_path / "output" / "qa" / "m2_qa_report.json"
+    run_manifest_json = tmp_path / "run_m2_manifest.json"
     config = _build_app_config()
 
     artifacts = run_m2_pipeline(
         translation_input_json_path=translation_input,
         output_json_path=output_json,
         qa_report_json_path=qa_report_json,
+        run_manifest_json_path=run_manifest_json,
         config=config,
     )
 
     assert artifacts.translation_output_json == output_json
     assert artifacts.qa_report_json == qa_report_json
+    assert artifacts.run_manifest_json == run_manifest_json
 
     output_payload = json.loads(output_json.read_text(encoding="utf-8"))
     assert output_payload["stage"] == "m2_translation_output"
@@ -115,3 +120,9 @@ def test_run_m2_pipeline_with_mock_backend(tmp_path: Path) -> None:
     assert "quality_flags" in qa_payload
     assert "punctuation_metrics" in qa_payload
     assert "terminology_metrics" in qa_payload
+
+    manifest_payload = json.loads(run_manifest_json.read_text(encoding="utf-8"))
+    assert manifest_payload["stage"] == "m2"
+    assert "timings_seconds" in manifest_payload
+    assert "speed" in manifest_payload
+    assert manifest_payload["speed"]["translation_reuse_count"] == 1

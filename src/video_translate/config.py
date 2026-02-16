@@ -41,6 +41,8 @@ class TranslateTransformersConfig:
     model_id: str
     device: int
     max_new_tokens: int
+    source_lang_code: str | None
+    target_lang_code: str | None
 
 
 @dataclass(frozen=True)
@@ -183,6 +185,18 @@ def load_config(config_path: Path | None = None) -> AppConfig:
         translate_transformers_table.get("max_new_tokens", 256),
         "translate.transformers.max_new_tokens",
     )
+    source_lang_code_raw = translate_transformers_table.get("source_lang_code", None)
+    target_lang_code_raw = translate_transformers_table.get("target_lang_code", None)
+    source_lang_code = (
+        _required_non_empty_str(source_lang_code_raw, "translate.transformers.source_lang_code")
+        if source_lang_code_raw is not None
+        else None
+    )
+    target_lang_code = (
+        _required_non_empty_str(target_lang_code_raw, "translate.transformers.target_lang_code")
+        if target_lang_code_raw is not None
+        else None
+    )
     glossary_raw = translate_table.get("glossary_path", None)
     glossary_path: Path | None
     if glossary_raw is None:
@@ -237,6 +251,8 @@ def load_config(config_path: Path | None = None) -> AppConfig:
                 model_id=transformers_model_id,
                 device=transformers_device,
                 max_new_tokens=transformers_max_new_tokens,
+                source_lang_code=source_lang_code,
+                target_lang_code=target_lang_code,
             ),
         ),
     )

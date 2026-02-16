@@ -2,7 +2,9 @@
 model = "small"
 device = "cuda"
 compute_type = "int8_float16"
-beam_size = 5
+beam_size = 3
+word_timestamps = false
+vad_filter = true
 fallback_on_oom = true
 fallback_model = "small"
 fallback_device = "cpu"
@@ -10,11 +12,11 @@ fallback_compute_type = "int8"
 
 [translate]
 backend = "transformers"
-batch_size = 4
+batch_size = 6
 source_language = "en"
 target_language = "tr"
-min_length_ratio = 0.50
-max_length_ratio = 1.80
+min_length_ratio = 0.45
+max_length_ratio = 1.90
 glossary_path = "configs/glossary.en-tr.json"
 glossary_case_sensitive = false
 apply_glossary_postprocess = true
@@ -23,6 +25,6 @@ qa_check_terminal_punctuation = true
 [translate.transformers]
 model_id = "facebook/m2m100_418M"
 device = -1
-max_new_tokens = 192
+max_new_tokens = 160
 source_lang_code = "en"
 target_lang_code = "tr"

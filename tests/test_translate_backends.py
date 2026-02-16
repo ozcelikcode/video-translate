@@ -20,6 +20,8 @@ def _base_translate_config(backend: str) -> TranslateConfig:
             model_id="Helsinki-NLP/opus-mt-en-tr",
             device=-1,
             max_new_tokens=256,
+            source_lang_code=None,
+            target_lang_code=None,
         ),
     )
 

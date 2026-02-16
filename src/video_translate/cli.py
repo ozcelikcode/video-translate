@@ -6,6 +6,7 @@ import typer
 
 from video_translate.config import load_config
 from video_translate.pipeline.m1 import run_m1_pipeline
+from video_translate.pipeline.m2_benchmark import run_m2_profile_benchmark
 from video_translate.pipeline.m2 import run_m2_pipeline
 from video_translate.pipeline.m2_prep import prepare_m2_translation_input
 from video_translate.preflight import preflight_errors, run_preflight
@@ -224,11 +225,17 @@ def run_m2(
         else:
             resolved_qa_report = resolved_input.parent.parent / "qa" / "m2_qa_report.json"
 
+    if run_root is not None:
+        resolved_manifest = run_root / "run_m2_manifest.json"
+    else:
+        resolved_manifest = resolved_input.parent.parent.parent / "run_m2_manifest.json"
+
     try:
         artifacts = run_m2_pipeline(
             translation_input_json_path=resolved_input,
             output_json_path=resolved_output,
             qa_report_json_path=resolved_qa_report,
+            run_manifest_json_path=resolved_manifest,
             config=config,
             target_language_override=resolved_target_lang,
         )
@@ -248,6 +255,46 @@ def run_m2(
     typer.echo(f"M2 input: {artifacts.translation_input_json}")
     typer.echo(f"M2 output: {artifacts.translation_output_json}")
     typer.echo(f"M2 QA report: {artifacts.qa_report_json}")
+    typer.echo(f"M2 run manifest: {artifacts.run_manifest_json}")
+
+
+@app.command("benchmark-m2")
+def benchmark_m2(
+    run_root: Path = typer.Option(..., "--run-root", help="Run root directory created by run-m1."),
+    translation_input: Path | None = typer.Option(
+        None,
+        "--translation-input",
+        help="Optional explicit translation input path. Defaults to run-root path.",
+    ),
+    config_path: list[Path] = typer.Option(
+        [],
+        "--config",
+        help="Config path(s). Use multiple --config entries to compare profiles.",
+    ),
+) -> None:
+    """Benchmark multiple M2 profiles on the same translation input."""
+    resolved_input = translation_input or (run_root / "output" / "translate" / "translation_input.en-tr.json")
+    configs = config_path or [
+        Path("configs/profiles/gtx1650_i5_12500h.toml"),
+        Path("configs/profiles/gtx1650_fast.toml"),
+    ]
+    try:
+        report_path = run_m2_profile_benchmark(
+            run_root=run_root,
+            translation_input_json=resolved_input,
+            config_paths=configs,
+        )
+    except FileNotFoundError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=10) from exc
+    except ValueError as exc:
+        typer.echo(f"Invalid benchmark input: {exc}", err=True)
+        raise typer.Exit(code=11) from exc
+    except Exception as exc:  # noqa: BLE001
+        typer.echo(f"Unexpected benchmark failure: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+
+    typer.echo(f"M2 benchmark report: {report_path}")
 
 
 def main() -> None:
