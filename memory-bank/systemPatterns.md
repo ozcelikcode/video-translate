@@ -23,6 +23,11 @@ Pipeline tabanli, moduler, asamali genisletilebilir bir mimari.
 - `qa.m1_report.build_m1_qa_report` ile kalite metrigi cikarma
 - `io.write_json` ile run manifest yazimi
 
+## M2 Hazirlik Akisi
+- `cli.prepare-m2` -> `pipeline.m2_prep.prepare_m2_translation_input`
+- M1 transcript JSON'undan ceviri giris sozlesmesi uretimi
+- Cikti: `output/translate/translation_input.en-tr.json`
+
 ## Tasarim Prensipleri
 - Tek sorumluluk ilkesi
 - Saf fonksiyon + acik veri akisi

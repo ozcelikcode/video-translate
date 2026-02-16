@@ -1,7 +1,7 @@
 # Progress
 
 ## Mevcut Durum
-Proje M1 uygulama asamasina gecti. Ilk calisabilir pipeline kodu olusturuldu.
+Proje M1 uygulama asamasini buyuk oranda tamamladi ve M2 hazirlik adimina gecti.
 
 ## Tamamlananlar
 - Memory Bank klasor yapisi olusturuldu.
@@ -15,17 +15,31 @@ Proje M1 uygulama asamasina gecti. Ilk calisabilir pipeline kodu olusturuldu.
 - Her kosu icin `run_manifest.json` uretimi eklendi.
 - Konfigurasyon dogrulama eklendi (gecersiz degerlerde erken hata).
 - M1 QA raporu eklendi (`output/qa/m1_qa_report.json`).
+- M2 hazirlik komutu eklendi (`prepare-m2`).
+- M2 ceviri giris sozlesmesi eklendi (`output/translate/translation_input.en-tr.json`).
 - M1 milestone dokumani olusturuldu.
+- M2 milestone dokumani baslatildi.
 - Temel birim testleri genisletildi ve gecti.
 
 ## Devam Edenler
 - M1 icin gercek video uzerinde entegrasyon calistirmasi henuz yapilmadi.
 - Model kalitesi/performans dengesi icin ASR ayarlari tune edilmedi.
+- M2 icin ceviri model baglantisi henuz yapilmadi.
+- M2 cikti sozlesmesi ve QA kontrolleri henuz eklenmedi.
 
 ## Siradaki Somut Is
 - M1'i ornek bir YouTube videosu ile uc uca calistirmak.
 - Uretilen transcript kalitesini manuel kontrol etmek.
-- M2 icin ceviri katmani arabirimini tanimlamak.
+- M2 yerel EN->TR modeli ile ceviri cikti uretmek.
+- M2 kalite kontrollerini eklemek.
+
+## Tamamlama Tahmini (2026-02-16)
+- Genel tamamlanma: `%24` (tahmini)
+- `M1`: `%85` (kod ve QA hazir, gercek video entegrasyon calistirmasi eksik)
+- `M2`: `%15` (giris sozlesmesi var, ceviri motoru ve cikti akisi eksik)
+- `M3`: `%0`
+- `M4`: `%0`
+- `M5`: `%0`
 
 ## Bilinen Riskler
 - Turkce TTS kalite farklari model secimine gore degisebilir.

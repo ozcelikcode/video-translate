@@ -34,6 +34,12 @@ Outputs are written under `runs/<run_id>/`.
 Each run also includes `run_manifest.json` for traceability.
 M1 also writes `output/qa/m1_qa_report.json` with automatic transcript quality metrics.
 
+Prepare M2 translation input contract from an M1 run:
+
+```bash
+video-translate prepare-m2 --run-root runs/m1_YYYYMMDD_HHMMSS
+```
+
 ## Optional Flags
 
 ```bash

@@ -36,3 +36,4 @@
 - ASR: `faster-whisper` (yerel model)
 - Ingest: harici komutlar (`yt-dlp`, `ffmpeg`)
 - On kontrol: `doctor` komutu ile yerel bagimlilik denetimi
+- M2 hazirlik: `prepare-m2` ile ceviri giris sozlesmesi uretimi

@@ -1,7 +1,7 @@
 # Active Context
 
 ## Mevcut Odak
-M1 iskeleti saglamlastirildi. Simdi odak M1'i ornek bir video ile calistirip ingest ve ASR ciktilarini dogrulamak.
+M1 uretim hazirligi guclendirildi. Simdi odak M1 ciktilarindan M2 ceviri katmanina kontrollu gecis.
 
 ## Son Degisiklikler
 - M1 kod tabani olusturuldu (`src/video_translate`).
@@ -13,7 +13,10 @@ M1 iskeleti saglamlastirildi. Simdi odak M1'i ornek bir video ile calistirip ing
 - Run izlenebilirligi icin `run_manifest.json` eklendi.
 - Konfigurasyon deger dogrulamasi eklendi (gecersiz degerlerde erken hata).
 - M1 otomatik kalite raporu eklendi (`output/qa/m1_qa_report.json`).
+- `prepare-m2` komutu eklendi.
+- M2 ceviri giris sozlesmesi eklendi (`output/translate/translation_input.en-tr.json`).
 - M1 dokumani eklendi (`docs/milestones/m1.md`).
+- M2 dokumani baslatildi (`docs/milestones/m2.md`).
 - Temel birim testleri genisletildi ve gecti.
 
 ## Aktif Kararlar
@@ -25,7 +28,7 @@ M1 iskeleti saglamlastirildi. Simdi odak M1'i ornek bir video ile calistirip ing
 ## Sonraki Adimlar
 - M1'i gercek bir YouTube URL ile calistirmak.
 - Ornek transcript kalitesini inceleyip M2 ceviri katmani icin segment stratejisini netlestirmek.
-- M2 ceviri katmani arabirimini (girdi/cikti sozlesmesi) tasarlamak.
+- M2 yerel ceviri modelini baglamak ve `translation_output.en-tr.json` uretmek.
 
 ## Dikkat Notlari
 - Senkron hedefi yuksek, fakat lip reading kullanilmayacak.
