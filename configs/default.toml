@@ -1,0 +1,18 @@
+[tools]
+yt_dlp = "yt-dlp"
+ffmpeg = "ffmpeg"
+
+[pipeline]
+workspace_dir = "runs"
+audio_sample_rate = 16000
+audio_channels = 1
+audio_codec = "pcm_s16le"
+
+[asr]
+model = "medium"
+device = "auto"
+compute_type = "default"
+beam_size = 5
+language = "en"
+word_timestamps = true
+vad_filter = true
