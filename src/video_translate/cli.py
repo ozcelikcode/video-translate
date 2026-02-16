@@ -22,13 +22,22 @@ def doctor(
 ) -> None:
     """Validate local environment dependencies for the pipeline."""
     config = load_config(config_path)
-    report = run_preflight(yt_dlp_bin=config.tools.yt_dlp, ffmpeg_bin=config.tools.ffmpeg)
+    report = run_preflight(
+        yt_dlp_bin=config.tools.yt_dlp,
+        ffmpeg_bin=config.tools.ffmpeg,
+        translate_backend=config.translate.backend,
+        check_translate_backend=True,
+    )
     errors = preflight_errors(report)
 
     typer.echo(f"Python: {report.python_version}")
     typer.echo(f"yt-dlp: {report.yt_dlp.path or 'MISSING'}")
     typer.echo(f"ffmpeg: {report.ffmpeg.path or 'MISSING'}")
     typer.echo(f"faster_whisper: {'OK' if report.faster_whisper_available else 'MISSING'}")
+    if report.translate_backend == "transformers":
+        typer.echo(f"transformers: {'OK' if report.transformers_available else 'MISSING'}")
+        typer.echo(f"sentencepiece: {'OK' if report.sentencepiece_available else 'MISSING'}")
+        typer.echo(f"torch: {'OK' if report.torch_available else 'MISSING'}")
 
     if errors:
         for error in errors:
@@ -107,7 +116,12 @@ def run_m1(
     """Run M1 pipeline: ingest + normalize + ASR."""
     try:
         config = load_config(config_path)
-        preflight_report = run_preflight(yt_dlp_bin=config.tools.yt_dlp, ffmpeg_bin=config.tools.ffmpeg)
+        preflight_report = run_preflight(
+            yt_dlp_bin=config.tools.yt_dlp,
+            ffmpeg_bin=config.tools.ffmpeg,
+            translate_backend=config.translate.backend,
+            check_translate_backend=False,
+        )
         errors = preflight_errors(preflight_report)
         if errors:
             for error in errors:
@@ -170,6 +184,18 @@ def run_m2(
 ) -> None:
     """Run M2 pipeline: translation output + QA report."""
     config = load_config(config_path)
+    preflight_report = run_preflight(
+        yt_dlp_bin=config.tools.yt_dlp,
+        ffmpeg_bin=config.tools.ffmpeg,
+        translate_backend=config.translate.backend,
+        check_translate_backend=True,
+    )
+    preflight_issue_list = preflight_errors(preflight_report)
+    if preflight_issue_list:
+        for issue in preflight_issue_list:
+            typer.echo(f"- {issue}", err=True)
+        raise typer.Exit(code=4)
+
     resolved_target_lang = target_lang or config.translate.target_language
 
     resolved_input = translation_input

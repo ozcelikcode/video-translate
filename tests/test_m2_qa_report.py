@@ -1,0 +1,89 @@
+from pathlib import Path
+
+from video_translate.config import TranslateConfig, TranslateTransformersConfig
+from video_translate.qa.m2_report import build_m2_qa_report
+from video_translate.translate.contracts import (
+    build_translation_output_document,
+    parse_translation_input_document,
+)
+
+
+def _translate_config() -> TranslateConfig:
+    return TranslateConfig(
+        backend="mock",
+        source_language="en",
+        target_language="tr",
+        batch_size=8,
+        min_length_ratio=0.5,
+        max_length_ratio=1.8,
+        glossary_path=Path("configs/glossary.en-tr.json"),
+        glossary_case_sensitive=False,
+        apply_glossary_postprocess=True,
+        qa_check_terminal_punctuation=True,
+        transformers=TranslateTransformersConfig(
+            model_id="Helsinki-NLP/opus-mt-en-tr",
+            device=-1,
+            max_new_tokens=256,
+        ),
+    )
+
+
+def test_build_m2_qa_report_with_glossary_and_punctuation_flags() -> None:
+    input_doc = parse_translation_input_document(
+        {
+            "schema_version": "1.0",
+            "stage": "m2_translation_input",
+            "generated_at_utc": "2026-02-16T10:00:00Z",
+            "source_language": "en",
+            "target_language": "tr",
+            "segment_count": 2,
+            "total_source_word_count": 5,
+            "segments": [
+                {
+                    "id": 0,
+                    "start": 0.0,
+                    "end": 1.0,
+                    "duration": 1.0,
+                    "source_text": "Open source is great.",
+                    "source_word_count": 4,
+                },
+                {
+                    "id": 1,
+                    "start": 1.0,
+                    "end": 2.0,
+                    "duration": 1.0,
+                    "source_text": "Dataset?",
+                    "source_word_count": 1,
+                },
+            ],
+        }
+    )
+    output_doc = build_translation_output_document(
+        input_doc=input_doc,
+        translated_texts=[
+            "acik kaynak harika?",
+            "veri kumesi.",
+        ],
+        backend="mock",
+    )
+    report = build_m2_qa_report(
+        output_doc,
+        _translate_config(),
+        glossary={
+            "open source": "acik kaynak",
+            "dataset": "veri kumesi",
+        },
+    )
+
+    punctuation_metrics = report["punctuation_metrics"]
+    assert isinstance(punctuation_metrics, dict)
+    assert punctuation_metrics["mismatch_count"] == 2
+
+    terminology_metrics = report["terminology_metrics"]
+    assert isinstance(terminology_metrics, dict)
+    assert terminology_metrics["expected_term_count"] == 2
+    assert terminology_metrics["matched_term_count"] == 2
+
+    flags = report["quality_flags"]
+    assert isinstance(flags, list)
+    assert "terminal_punctuation_mismatch_present" in flags

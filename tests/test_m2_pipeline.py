@@ -29,6 +29,10 @@ def _build_app_config() -> AppConfig:
             language="en",
             word_timestamps=True,
             vad_filter=True,
+            fallback_on_oom=True,
+            fallback_model="small",
+            fallback_device="cpu",
+            fallback_compute_type="int8",
         ),
         translate=TranslateConfig(
             backend="mock",
@@ -37,6 +41,10 @@ def _build_app_config() -> AppConfig:
             batch_size=8,
             min_length_ratio=0.50,
             max_length_ratio=1.80,
+            glossary_path=None,
+            glossary_case_sensitive=False,
+            apply_glossary_postprocess=True,
+            qa_check_terminal_punctuation=True,
             transformers=TranslateTransformersConfig(
                 model_id="Helsinki-NLP/opus-mt-en-tr",
                 device=-1,
@@ -105,3 +113,5 @@ def test_run_m2_pipeline_with_mock_backend(tmp_path: Path) -> None:
     assert qa_payload["stage"] == "m2"
     assert qa_payload["backend"] == "mock"
     assert "quality_flags" in qa_payload
+    assert "punctuation_metrics" in qa_payload
+    assert "terminology_metrics" in qa_payload

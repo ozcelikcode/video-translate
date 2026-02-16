@@ -24,6 +24,15 @@ Run environment doctor:
 video-translate doctor
 ```
 
+Recommended profile for GTX 1650 (4GB VRAM) + 16GB RAM:
+
+```bash
+video-translate doctor --config configs/profiles/gtx1650_i5_12500h.toml
+video-translate run-m1 --url "https://www.youtube.com/watch?v=VIDEO_ID" --config configs/profiles/gtx1650_i5_12500h.toml
+video-translate prepare-m2 --run-root runs/m1_YYYYMMDD_HHMMSS
+video-translate run-m2 --run-root runs/m1_YYYYMMDD_HHMMSS --config configs/profiles/gtx1650_i5_12500h.toml
+```
+
 Run M1:
 
 ```bash
@@ -56,6 +65,12 @@ and install optional deps:
 ```bash
 pip install -e .[m2]
 ```
+
+M2 supports optional glossary enforcement via `translate.glossary_path`
+and reports terminology + punctuation metrics in `m2_qa_report.json`.
+
+ASR has automatic OOM fallback. If GPU memory is insufficient, the pipeline
+retries on CPU using fallback ASR settings from config.
 
 ## Optional Flags
 

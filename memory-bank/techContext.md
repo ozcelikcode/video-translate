@@ -39,3 +39,8 @@
 - On kontrol: `doctor` komutu ile yerel bagimlilik denetimi
 - M2 hazirlik: `prepare-m2` ile ceviri giris sozlesmesi uretimi
 - M2 calistirma: `run-m2` ile ceviri cikti + QA uretimi
+- M2 glossary: `configs/glossary.en-tr.json` (kaynak terim -> hedef terim)
+- M2 QA: terminal noktalama ve glossary eslesme metrikleri
+- Donanim profili: `configs/profiles/gtx1650_i5_12500h.toml`
+- ASR fallback: GPU OOM algilanirsa CPU (`int8`) fallback
+- Doctor kontrolu: `transformers/sentencepiece/torch` bagimliliklarini da denetler

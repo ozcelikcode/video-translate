@@ -13,6 +13,7 @@ from video_translate.translate.contracts import (
     build_translation_output_document,
     parse_translation_input_document,
 )
+from video_translate.translate.glossary import apply_glossary, load_glossary
 
 
 @dataclass(frozen=True)
@@ -53,6 +54,7 @@ def run_m2_pipeline(
         )
 
     backend = build_translation_backend(config.translate)
+    glossary = load_glossary(config.translate.glossary_path)
     source_texts = [segment.source_text for segment in input_doc.segments]
     translated_texts = backend.translate_batch(
         source_texts,
@@ -60,6 +62,15 @@ def run_m2_pipeline(
         target_language=input_doc.target_language,
         batch_size=config.translate.batch_size,
     )
+    if config.translate.apply_glossary_postprocess and glossary:
+        translated_texts = [
+            apply_glossary(
+                text,
+                glossary,
+                case_sensitive=config.translate.glossary_case_sensitive,
+            )
+            for text in translated_texts
+        ]
     output_doc = build_translation_output_document(
         input_doc=input_doc,
         translated_texts=translated_texts,
@@ -68,11 +79,17 @@ def run_m2_pipeline(
     output_json_path.parent.mkdir(parents=True, exist_ok=True)
     qa_report_json_path.parent.mkdir(parents=True, exist_ok=True)
     write_json(output_json_path, output_doc.to_dict())
-    write_json(qa_report_json_path, build_m2_qa_report(output_doc, config.translate))
+    write_json(
+        qa_report_json_path,
+        build_m2_qa_report(
+            output_doc,
+            config.translate,
+            glossary=glossary,
+        ),
+    )
 
     return M2Artifacts(
         translation_input_json=translation_input_json_path,
         translation_output_json=output_json_path,
         qa_report_json=qa_report_json_path,
     )
-

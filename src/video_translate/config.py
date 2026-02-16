@@ -30,6 +30,10 @@ class ASRConfig:
     language: str
     word_timestamps: bool
     vad_filter: bool
+    fallback_on_oom: bool
+    fallback_model: str
+    fallback_device: str
+    fallback_compute_type: str
 
 
 @dataclass(frozen=True)
@@ -47,6 +51,10 @@ class TranslateConfig:
     batch_size: int
     min_length_ratio: float
     max_length_ratio: float
+    glossary_path: Path | None
+    glossary_case_sensitive: bool
+    apply_glossary_postprocess: bool
+    qa_check_terminal_punctuation: bool
     transformers: TranslateTransformersConfig
 
 
@@ -133,6 +141,15 @@ def load_config(config_path: Path | None = None) -> AppConfig:
     )
     beam_size = _required_positive_int(asr_table.get("beam_size", 5), "asr.beam_size")
     language = _required_non_empty_str(asr_table.get("language", "en"), "asr.language")
+    fallback_model = _required_non_empty_str(
+        asr_table.get("fallback_model", "small"), "asr.fallback_model"
+    )
+    fallback_device = _required_non_empty_str(
+        asr_table.get("fallback_device", "cpu"), "asr.fallback_device"
+    )
+    fallback_compute_type = _required_non_empty_str(
+        asr_table.get("fallback_compute_type", "int8"), "asr.fallback_compute_type"
+    )
     translate_backend = _required_non_empty_str(
         translate_table.get("backend", "mock"), "translate.backend"
     )
@@ -166,6 +183,20 @@ def load_config(config_path: Path | None = None) -> AppConfig:
         translate_transformers_table.get("max_new_tokens", 256),
         "translate.transformers.max_new_tokens",
     )
+    glossary_raw = translate_table.get("glossary_path", None)
+    glossary_path: Path | None
+    if glossary_raw is None:
+        glossary_path = None
+    else:
+        glossary_text = str(glossary_raw).strip()
+        glossary_path = Path(glossary_text) if glossary_text else None
+    if glossary_path is not None and not glossary_path.is_absolute():
+        glossary_path = root / glossary_path
+    glossary_case_sensitive = bool(translate_table.get("glossary_case_sensitive", False))
+    apply_glossary_postprocess = bool(translate_table.get("apply_glossary_postprocess", True))
+    qa_check_terminal_punctuation = bool(
+        translate_table.get("qa_check_terminal_punctuation", True)
+    )
 
     return AppConfig(
         tools=ToolConfig(
@@ -186,6 +217,10 @@ def load_config(config_path: Path | None = None) -> AppConfig:
             language=language,
             word_timestamps=bool(asr_table.get("word_timestamps", True)),
             vad_filter=bool(asr_table.get("vad_filter", True)),
+            fallback_on_oom=bool(asr_table.get("fallback_on_oom", True)),
+            fallback_model=fallback_model,
+            fallback_device=fallback_device,
+            fallback_compute_type=fallback_compute_type,
         ),
         translate=TranslateConfig(
             backend=translate_backend,
@@ -194,6 +229,10 @@ def load_config(config_path: Path | None = None) -> AppConfig:
             batch_size=translate_batch_size,
             min_length_ratio=min_length_ratio,
             max_length_ratio=max_length_ratio,
+            glossary_path=glossary_path,
+            glossary_case_sensitive=glossary_case_sensitive,
+            apply_glossary_postprocess=apply_glossary_postprocess,
+            qa_check_terminal_punctuation=qa_check_terminal_punctuation,
             transformers=TranslateTransformersConfig(
                 model_id=transformers_model_id,
                 device=transformers_device,

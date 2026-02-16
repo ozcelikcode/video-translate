@@ -30,6 +30,10 @@ def test_build_run_manifest_contains_core_fields() -> None:
             language="en",
             word_timestamps=True,
             vad_filter=True,
+            fallback_on_oom=True,
+            fallback_model="small",
+            fallback_device="cpu",
+            fallback_compute_type="int8",
         ),
         translate=TranslateConfig(
             backend="mock",
@@ -38,6 +42,10 @@ def test_build_run_manifest_contains_core_fields() -> None:
             batch_size=8,
             min_length_ratio=0.5,
             max_length_ratio=1.8,
+            glossary_path=None,
+            glossary_case_sensitive=False,
+            apply_glossary_postprocess=True,
+            qa_check_terminal_punctuation=True,
             transformers=TranslateTransformersConfig(
                 model_id="Helsinki-NLP/opus-mt-en-tr",
                 device=-1,
@@ -59,6 +67,10 @@ def test_build_run_manifest_contains_core_fields() -> None:
         yt_dlp=ToolCheck(name="yt-dlp", command="yt-dlp", path="/bin/yt-dlp"),
         ffmpeg=ToolCheck(name="ffmpeg", command="ffmpeg", path="/bin/ffmpeg"),
         faster_whisper_available=True,
+        translate_backend="mock",
+        transformers_available=None,
+        sentencepiece_available=None,
+        torch_available=None,
     )
 
     manifest = _build_run_manifest(

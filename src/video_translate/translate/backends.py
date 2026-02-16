@@ -60,8 +60,8 @@ class TransformersTranslationBackend:
             from transformers import pipeline  # Imported lazily.
         except ImportError as exc:
             raise RuntimeError(
-                "Transformers backend requires 'transformers'. "
-                "Install with: pip install transformers sentencepiece"
+                "Transformers backend requires 'transformers', 'sentencepiece', and 'torch'. "
+                "Install with: pip install transformers sentencepiece torch"
             ) from exc
 
         translator = pipeline(
@@ -99,4 +99,3 @@ def build_translation_backend(config: TranslateConfig) -> TranslationBackend:
         f"Unsupported translation backend '{config.backend}'. "
         "Supported backends: mock, transformers."
     )
-

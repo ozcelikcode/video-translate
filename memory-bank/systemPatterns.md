@@ -22,6 +22,7 @@ Pipeline tabanli, moduler, asamali genisletilebilir bir mimari.
 - `io.write_transcript_json` ve `io.write_srt` ile cikti yazimi
 - `qa.m1_report.build_m1_qa_report` ile kalite metrigi cikarma
 - `io.write_json` ile run manifest yazimi
+- ASR hata dayanimi: GPU OOM durumunda `asr.whisper` CPU fallback
 
 ## M2 Hazirlik Akisi
 - `cli.prepare-m2` -> `pipeline.m2_prep.prepare_m2_translation_input`
@@ -32,9 +33,18 @@ Pipeline tabanli, moduler, asamali genisletilebilir bir mimari.
 - `cli.run-m2` -> `pipeline.m2.run_m2_pipeline`
 - Ceviri backend secimi: `translate.backends.build_translation_backend`
 - Desteklenen backendler: `mock`, `transformers`
+- Glossary yukleme ve ceviri sonrasi terim duzeltme: `translate.glossary`
 - Cikti: `output/translate/translation_output.en-tr.json`
 - QA: `qa.m2_report.build_m2_qa_report`
 - QA cikti: `output/qa/m2_qa_report.json`
+- M2 QA kapsami: uzunluk orani + terminal noktalama + glossary terim eslesmesi
+
+## Donanim Profili
+- GTX1650 + i5-12500H + 16GB RAM icin profil:
+  - `configs/profiles/gtx1650_i5_12500h.toml`
+  - ASR: `small` + `cuda` + `int8_float16` + OOM fallback
+  - M2: `transformers` backend, CPU ceviri (`device=-1`) ile stabil calisma
+- Doctor: profilde `transformers` backend seciliyse M2 Python bagimliliklarini dogrular
 
 ## Tasarim Prensipleri
 - Tek sorumluluk ilkesi

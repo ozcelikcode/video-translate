@@ -1,4 +1,4 @@
-# Progress
+﻿# Progress
 
 ## Mevcut Durum
 Proje M1 uygulama asamasini buyuk oranda tamamladi ve M2 ilk calisir ceviri akisina gecti.
@@ -22,15 +22,22 @@ Proje M1 uygulama asamasini buyuk oranda tamamladi ve M2 ilk calisir ceviri akis
 - M2 QA raporu eklendi (`output/qa/m2_qa_report.json`).
 - Ceviri backend katmani eklendi (`mock`, `transformers`).
 - `run-m2` smoke testi basarili calistirildi (mock backend).
+- M2 glossary destegi eklendi (`configs/glossary.en-tr.json`).
+- M2 ceviri sonrasi glossary postprocess eklendi.
+- M2 QA'ya terminal noktalama ve glossary eslesme metrikleri eklendi.
+- ASR GPU OOM fallback eklendi (otomatik CPU gecisi).
+- GTX1650 + i5-12500H profil config eklendi (`configs/profiles/gtx1650_i5_12500h.toml`).
+- Doctor kapsami M2 bagimliliklarini da kontrol edecek sekilde genisletildi.
+- GTX1650 profili icin `transformers/sentencepiece/torch` kurulumu yapildi ve doctor gecildi.
 - M1 milestone dokumani olusturuldu.
 - M2 milestone dokumani baslatildi.
 - Temel birim testleri genisletildi ve gecti.
 
 ## Devam Edenler
 - M1 icin gercek video uzerinde entegrasyon calistirmasi henuz yapilmadi.
-- Model kalitesi/performans dengesi icin ASR ayarlari tune edilmedi.
+- ASR kalitesi icin `small/medium` profil tune karsilastirmasi henuz yapilmadi.
 - M2 `transformers` backend gercek model kalitesi tune edilmedi.
-- M2 QA kapsaminda terminoloji/noktalama kontrolleri henuz eklenmedi.
+- M2 glossary kapsaminda alan-ozel terimler henuz zenginlestirilmedi.
 
 ## Siradaki Somut Is
 - M1'i ornek bir YouTube videosu ile uc uca calistirmak.
@@ -39,9 +46,9 @@ Proje M1 uygulama asamasini buyuk oranda tamamladi ve M2 ilk calisir ceviri akis
 - M2 kalite kontrollerini eklemek.
 
 ## Tamamlama Tahmini (2026-02-16)
-- Genel tamamlanma: `%32` (tahmini)
-- `M1`: `%85` (kod ve QA hazir, gercek video entegrasyon calistirmasi eksik)
-- `M2`: `%38` (giris/cikti/QA akisi var, kalite tuning ve model dogrulamasi eksik)
+- Genel tamamlanma: `%42` (tahmini)
+- `M1`: `%90` (donanim fallback dahil, gercek video entegrasyon calistirmasi eksik)
+- `M2`: `%56` (giris/cikti/QA + glossary + donanim profili var, kalite tuning ve saha dogrulamasi eksik)
 - `M3`: `%0`
 - `M4`: `%0`
 - `M5`: `%0`
@@ -52,3 +59,4 @@ Proje M1 uygulama asamasini buyuk oranda tamamladi ve M2 ilk calisir ceviri akis
 - Tam profesyonel senkron icin QA metrikleri erken asamada zorunlu.
 - Yerel ortamda `yt-dlp` veya `ffmpeg` eksikse pipeline calismaz.
 - ASR model secimi (hiz/dogruluk) cihaza gore farkli davranabilir.
+

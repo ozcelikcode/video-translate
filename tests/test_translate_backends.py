@@ -12,6 +12,10 @@ def _base_translate_config(backend: str) -> TranslateConfig:
         batch_size=8,
         min_length_ratio=0.5,
         max_length_ratio=1.8,
+        glossary_path=None,
+        glossary_case_sensitive=False,
+        apply_glossary_postprocess=True,
+        qa_check_terminal_punctuation=True,
         transformers=TranslateTransformersConfig(
             model_id="Helsinki-NLP/opus-mt-en-tr",
             device=-1,

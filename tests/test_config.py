@@ -26,8 +26,12 @@ def test_load_config_applies_override(tmp_path: Path) -> None:
     assert config.pipeline.workspace_dir == Path("custom_runs")
     assert config.pipeline.audio_sample_rate == 22050
     assert config.asr.beam_size == 3
+    assert config.asr.fallback_on_oom is True
+    assert config.asr.fallback_device == "cpu"
     assert config.translate.backend == "mock"
     assert config.translate.target_language == "tr"
+    assert config.translate.glossary_path is not None
+    assert config.translate.glossary_path.name == "glossary.en-tr.json"
 
 
 def test_load_config_rejects_non_positive_values(tmp_path: Path) -> None:
