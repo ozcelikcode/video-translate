@@ -10,6 +10,7 @@
 
 ## Gelistirme Araclari
 - `pip` tabanli baslangic kurulum tanimlandi (`pip install -e .[dev]`)
+- M2 opsiyonel bagimliliklari: `pip install -e .[m2]`
 - `ruff` (lint + format)
 - `mypy` (tip kontrolu)
 - `pytest` (test)
@@ -37,3 +38,4 @@
 - Ingest: harici komutlar (`yt-dlp`, `ffmpeg`)
 - On kontrol: `doctor` komutu ile yerel bagimlilik denetimi
 - M2 hazirlik: `prepare-m2` ile ceviri giris sozlesmesi uretimi
+- M2 calistirma: `run-m2` ile ceviri cikti + QA uretimi

@@ -1,7 +1,7 @@
 # Progress
 
 ## Mevcut Durum
-Proje M1 uygulama asamasini buyuk oranda tamamladi ve M2 hazirlik adimina gecti.
+Proje M1 uygulama asamasini buyuk oranda tamamladi ve M2 ilk calisir ceviri akisina gecti.
 
 ## Tamamlananlar
 - Memory Bank klasor yapisi olusturuldu.
@@ -17,6 +17,11 @@ Proje M1 uygulama asamasini buyuk oranda tamamladi ve M2 hazirlik adimina gecti.
 - M1 QA raporu eklendi (`output/qa/m1_qa_report.json`).
 - M2 hazirlik komutu eklendi (`prepare-m2`).
 - M2 ceviri giris sozlesmesi eklendi (`output/translate/translation_input.en-tr.json`).
+- M2 calistirma komutu eklendi (`run-m2`).
+- M2 ceviri cikti sozlesmesi eklendi (`output/translate/translation_output.en-tr.json`).
+- M2 QA raporu eklendi (`output/qa/m2_qa_report.json`).
+- Ceviri backend katmani eklendi (`mock`, `transformers`).
+- `run-m2` smoke testi basarili calistirildi (mock backend).
 - M1 milestone dokumani olusturuldu.
 - M2 milestone dokumani baslatildi.
 - Temel birim testleri genisletildi ve gecti.
@@ -24,8 +29,8 @@ Proje M1 uygulama asamasini buyuk oranda tamamladi ve M2 hazirlik adimina gecti.
 ## Devam Edenler
 - M1 icin gercek video uzerinde entegrasyon calistirmasi henuz yapilmadi.
 - Model kalitesi/performans dengesi icin ASR ayarlari tune edilmedi.
-- M2 icin ceviri model baglantisi henuz yapilmadi.
-- M2 cikti sozlesmesi ve QA kontrolleri henuz eklenmedi.
+- M2 `transformers` backend gercek model kalitesi tune edilmedi.
+- M2 QA kapsaminda terminoloji/noktalama kontrolleri henuz eklenmedi.
 
 ## Siradaki Somut Is
 - M1'i ornek bir YouTube videosu ile uc uca calistirmak.
@@ -34,9 +39,9 @@ Proje M1 uygulama asamasini buyuk oranda tamamladi ve M2 hazirlik adimina gecti.
 - M2 kalite kontrollerini eklemek.
 
 ## Tamamlama Tahmini (2026-02-16)
-- Genel tamamlanma: `%24` (tahmini)
+- Genel tamamlanma: `%32` (tahmini)
 - `M1`: `%85` (kod ve QA hazir, gercek video entegrasyon calistirmasi eksik)
-- `M2`: `%15` (giris sozlesmesi var, ceviri motoru ve cikti akisi eksik)
+- `M2`: `%38` (giris/cikti/QA akisi var, kalite tuning ve model dogrulamasi eksik)
 - `M3`: `%0`
 - `M4`: `%0`
 - `M5`: `%0`

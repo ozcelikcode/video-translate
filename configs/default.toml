@@ -16,3 +16,16 @@ beam_size = 5
 language = "en"
 word_timestamps = true
 vad_filter = true
+
+[translate]
+backend = "mock"
+source_language = "en"
+target_language = "tr"
+batch_size = 8
+min_length_ratio = 0.50
+max_length_ratio = 1.80
+
+[translate.transformers]
+model_id = "Helsinki-NLP/opus-mt-en-tr"
+device = -1
+max_new_tokens = 256

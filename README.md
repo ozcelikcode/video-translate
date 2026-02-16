@@ -40,6 +40,23 @@ Prepare M2 translation input contract from an M1 run:
 video-translate prepare-m2 --run-root runs/m1_YYYYMMDD_HHMMSS
 ```
 
+Run M2 translation:
+
+```bash
+video-translate run-m2 --run-root runs/m1_YYYYMMDD_HHMMSS
+```
+
+M2 outputs:
+- `output/translate/translation_output.en-tr.json`
+- `output/qa/m2_qa_report.json`
+
+For real local model translation, set `translate.backend = "transformers"` in config
+and install optional deps:
+
+```bash
+pip install -e .[m2]
+```
+
 ## Optional Flags
 
 ```bash

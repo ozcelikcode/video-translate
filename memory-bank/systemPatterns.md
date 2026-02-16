@@ -28,6 +28,14 @@ Pipeline tabanli, moduler, asamali genisletilebilir bir mimari.
 - M1 transcript JSON'undan ceviri giris sozlesmesi uretimi
 - Cikti: `output/translate/translation_input.en-tr.json`
 
+## M2 Uygulanan Akis
+- `cli.run-m2` -> `pipeline.m2.run_m2_pipeline`
+- Ceviri backend secimi: `translate.backends.build_translation_backend`
+- Desteklenen backendler: `mock`, `transformers`
+- Cikti: `output/translate/translation_output.en-tr.json`
+- QA: `qa.m2_report.build_m2_qa_report`
+- QA cikti: `output/qa/m2_qa_report.json`
+
 ## Tasarim Prensipleri
 - Tek sorumluluk ilkesi
 - Saf fonksiyon + acik veri akisi

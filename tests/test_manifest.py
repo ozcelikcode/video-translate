@@ -1,6 +1,13 @@
 from pathlib import Path
 
-from video_translate.config import ASRConfig, AppConfig, PipelineConfig, ToolConfig
+from video_translate.config import (
+    ASRConfig,
+    AppConfig,
+    PipelineConfig,
+    ToolConfig,
+    TranslateConfig,
+    TranslateTransformersConfig,
+)
 from video_translate.models import M1Artifacts
 from video_translate.pipeline.m1 import _build_run_manifest
 from video_translate.preflight import PreflightReport, ToolCheck
@@ -23,6 +30,19 @@ def test_build_run_manifest_contains_core_fields() -> None:
             language="en",
             word_timestamps=True,
             vad_filter=True,
+        ),
+        translate=TranslateConfig(
+            backend="mock",
+            source_language="en",
+            target_language="tr",
+            batch_size=8,
+            min_length_ratio=0.5,
+            max_length_ratio=1.8,
+            transformers=TranslateTransformersConfig(
+                model_id="Helsinki-NLP/opus-mt-en-tr",
+                device=-1,
+                max_new_tokens=256,
+            ),
         ),
     )
     artifacts = M1Artifacts(

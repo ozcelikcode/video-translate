@@ -1,7 +1,7 @@
 # Active Context
 
 ## Mevcut Odak
-M1 uretim hazirligi guclendirildi. Simdi odak M1 ciktilarindan M2 ceviri katmanina kontrollu gecis.
+M2 ilk calisir ceviri akisi kuruldu. Simdi odak ceviri kalitesini uretim seviyesine tasimak.
 
 ## Son Degisiklikler
 - M1 kod tabani olusturuldu (`src/video_translate`).
@@ -15,6 +15,11 @@ M1 uretim hazirligi guclendirildi. Simdi odak M1 ciktilarindan M2 ceviri katmani
 - M1 otomatik kalite raporu eklendi (`output/qa/m1_qa_report.json`).
 - `prepare-m2` komutu eklendi.
 - M2 ceviri giris sozlesmesi eklendi (`output/translate/translation_input.en-tr.json`).
+- `run-m2` komutu eklendi.
+- M2 ceviri cikti sozlesmesi eklendi (`output/translate/translation_output.en-tr.json`).
+- M2 QA raporu eklendi (`output/qa/m2_qa_report.json`).
+- Ceviri backend katmani eklendi (`mock`, `transformers`).
+- `run-m2` komutu ile smoke test calistirildi (mock backend).
 - M1 dokumani eklendi (`docs/milestones/m1.md`).
 - M2 dokumani baslatildi (`docs/milestones/m2.md`).
 - Temel birim testleri genisletildi ve gecti.
@@ -28,7 +33,8 @@ M1 uretim hazirligi guclendirildi. Simdi odak M1 ciktilarindan M2 ceviri katmani
 ## Sonraki Adimlar
 - M1'i gercek bir YouTube URL ile calistirmak.
 - Ornek transcript kalitesini inceleyip M2 ceviri katmani icin segment stratejisini netlestirmek.
-- M2 yerel ceviri modelini baglamak ve `translation_output.en-tr.json` uretmek.
+- M2 `transformers` backend ile kalite tune etmek (model, batch, token ayarlari).
+- M2 QA sinyallerini terminoloji ve noktalama kontrolleriyle genisletmek.
 
 ## Dikkat Notlari
 - Senkron hedefi yuksek, fakat lip reading kullanilmayacak.

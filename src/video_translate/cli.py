@@ -6,6 +6,7 @@ import typer
 
 from video_translate.config import load_config
 from video_translate.pipeline.m1 import run_m1_pipeline
+from video_translate.pipeline.m2 import run_m2_pipeline
 from video_translate.pipeline.m2_prep import prepare_m2_translation_input
 from video_translate.preflight import preflight_errors, run_preflight
 from video_translate.utils.subprocess_utils import CommandExecutionError
@@ -140,6 +141,87 @@ def run_m1(
         typer.echo(f"Transcript SRT: {artifacts.transcript_srt}")
     typer.echo(f"QA Report: {artifacts.qa_report}")
     typer.echo(f"Run Manifest: {artifacts.run_manifest}")
+
+
+@app.command("run-m2")
+def run_m2(
+    run_root: Path | None = typer.Option(
+        None, "--run-root", help="Run root directory created by run-m1."
+    ),
+    translation_input: Path | None = typer.Option(
+        None,
+        "--translation-input",
+        help="Path to translation input contract. If omitted, derived from --run-root.",
+    ),
+    output_json: Path | None = typer.Option(
+        None, "--output-json", help="Optional explicit output JSON path."
+    ),
+    qa_report_json: Path | None = typer.Option(
+        None, "--qa-report-json", help="Optional explicit M2 QA report JSON path."
+    ),
+    target_lang: str | None = typer.Option(
+        None,
+        "--target-lang",
+        help="Optional override for target language code.",
+    ),
+    config_path: Path | None = typer.Option(
+        None, "--config", help="Optional TOML config file to override defaults."
+    ),
+) -> None:
+    """Run M2 pipeline: translation output + QA report."""
+    config = load_config(config_path)
+    resolved_target_lang = target_lang or config.translate.target_language
+
+    resolved_input = translation_input
+    if resolved_input is None:
+        if run_root is None:
+            raise typer.BadParameter("Either --run-root or --translation-input must be provided.")
+        resolved_input = (
+            run_root / "output" / "translate" / f"translation_input.en-{resolved_target_lang}.json"
+        )
+
+    resolved_output = output_json
+    if resolved_output is None:
+        if run_root is not None:
+            resolved_output = (
+                run_root / "output" / "translate" / f"translation_output.en-{resolved_target_lang}.json"
+            )
+        else:
+            resolved_output = (
+                resolved_input.parent / f"translation_output.en-{resolved_target_lang}.json"
+            )
+
+    resolved_qa_report = qa_report_json
+    if resolved_qa_report is None:
+        if run_root is not None:
+            resolved_qa_report = run_root / "output" / "qa" / "m2_qa_report.json"
+        else:
+            resolved_qa_report = resolved_input.parent.parent / "qa" / "m2_qa_report.json"
+
+    try:
+        artifacts = run_m2_pipeline(
+            translation_input_json_path=resolved_input,
+            output_json_path=resolved_output,
+            qa_report_json_path=resolved_qa_report,
+            config=config,
+            target_language_override=resolved_target_lang,
+        )
+    except FileNotFoundError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=7) from exc
+    except ValueError as exc:
+        typer.echo(f"Invalid input for M2 run: {exc}", err=True)
+        raise typer.Exit(code=8) from exc
+    except RuntimeError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=9) from exc
+    except Exception as exc:  # noqa: BLE001
+        typer.echo(f"Unexpected M2 pipeline failure: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+
+    typer.echo(f"M2 input: {artifacts.translation_input_json}")
+    typer.echo(f"M2 output: {artifacts.translation_output_json}")
+    typer.echo(f"M2 QA report: {artifacts.qa_report_json}")
 
 
 def main() -> None:
