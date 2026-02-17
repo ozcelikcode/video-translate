@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Protocol
@@ -45,6 +45,48 @@ class TransformersTranslationBackend:
     source_lang_code: str | None
     target_lang_code: str | None
     name: str = "transformers"
+
+    @staticmethod
+    def _repair_common_mojibake(text: str) -> str:
+        # Common UTF-8 mis-decoding repair for Turkish text.
+        if not text:
+            return text
+
+        suspicious_markers = ("Ã", "Ä", "Å", "Â", "?")
+        if all(marker not in text for marker in suspicious_markers):
+            return text
+
+        def score(candidate: str) -> tuple[int, int]:
+            suspicious_hits = sum(candidate.count(ch) for ch in suspicious_markers)
+            turkish_hits = sum(candidate.count(ch) for ch in "çgiösüÇGIÖSÜ")
+            return suspicious_hits, -turkish_hits
+
+        best = text
+        best_score = score(text)
+        frontier = [text]
+        seen = {text}
+
+        for _ in range(3):
+            next_frontier: list[str] = []
+            for current in frontier:
+                for source_encoding in ("latin-1", "cp1252", "cp1254"):
+                    try:
+                        repaired = current.encode(source_encoding).decode("utf-8")
+                    except UnicodeError:
+                        continue
+                    if repaired in seen:
+                        continue
+                    seen.add(repaired)
+                    next_frontier.append(repaired)
+                    repaired_score = score(repaired)
+                    if repaired_score < best_score:
+                        best = repaired
+                        best_score = repaired_score
+            if not next_frontier:
+                break
+            frontier = next_frontier
+
+        return best
 
     def translate_batch(
         self,
@@ -103,7 +145,7 @@ class TransformersTranslationBackend:
                 generate_kwargs["forced_bos_token_id"] = forced_bos_token_id
             generated = model.generate(**encoded, **generate_kwargs)
             decoded = tokenizer.batch_decode(generated, skip_special_tokens=True)
-            outputs.extend(text.strip() for text in decoded)
+            outputs.extend(self._repair_common_mojibake(text.strip()) for text in decoded)
         return outputs
 
 
@@ -123,3 +165,4 @@ def build_translation_backend(config: TranslateConfig) -> TranslationBackend:
         f"Unsupported translation backend '{config.backend}'. "
         "Supported backends: mock, transformers."
     )
+

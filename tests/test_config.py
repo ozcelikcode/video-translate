@@ -32,6 +32,24 @@ def test_load_config_applies_override(tmp_path: Path) -> None:
     assert config.translate.target_language == "tr"
     assert config.translate.glossary_path is not None
     assert config.translate.glossary_path.name == "glossary.en-tr.json"
+    assert config.translate.qa_check_long_segment_fluency is True
+    assert config.translate.qa_long_segment_word_threshold == 14
+    assert config.translate.qa_long_segment_max_pause_punct == 3
+    assert config.translate.qa_fail_on_flags is False
+    assert config.translate.qa_allowed_flags == ()
+    assert config.tts.backend == "mock"
+    assert config.tts.sample_rate == 24000
+    assert config.tts.min_segment_seconds == 0.12
+    assert config.tts.espeak_bin == "espeak"
+    assert config.tts.espeak_voice == "tr"
+    assert config.tts.espeak_speed_wpm == 165
+    assert config.tts.espeak_pitch == 50
+    assert config.tts.espeak_adaptive_rate_enabled is True
+    assert config.tts.espeak_adaptive_rate_min_wpm == 120
+    assert config.tts.espeak_adaptive_rate_max_wpm == 260
+    assert config.tts.espeak_adaptive_rate_max_passes == 3
+    assert config.tts.espeak_adaptive_rate_tolerance_seconds == 0.06
+    assert config.tts.max_duration_delta_seconds == 0.08
 
 
 def test_load_config_rejects_non_positive_values(tmp_path: Path) -> None:
@@ -64,4 +82,133 @@ def test_load_config_rejects_invalid_translate_ratio(tmp_path: Path) -> None:
     )
 
     with pytest.raises(ValueError, match="translate.max_length_ratio"):
+        load_config(override)
+
+
+def test_load_config_rejects_invalid_long_segment_threshold(tmp_path: Path) -> None:
+    override = tmp_path / "invalid_long_segment.toml"
+    override.write_text(
+        "\n".join(
+            [
+                "[translate]",
+                "qa_long_segment_word_threshold = 0",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="translate.qa_long_segment_word_threshold"):
+        load_config(override)
+
+
+def test_load_config_rejects_negative_pause_punct_limit(tmp_path: Path) -> None:
+    override = tmp_path / "invalid_pause_limit.toml"
+    override.write_text(
+        "\n".join(
+            [
+                "[translate]",
+                "qa_long_segment_max_pause_punct = -1",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="translate.qa_long_segment_max_pause_punct"):
+        load_config(override)
+
+
+def test_load_config_rejects_non_list_allowed_flags(tmp_path: Path) -> None:
+    override = tmp_path / "invalid_allowed_flags.toml"
+    override.write_text(
+        "\n".join(
+            [
+                "[translate]",
+                'qa_allowed_flags = "length_ratio_below_min_present"',
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="translate.qa_allowed_flags"):
+        load_config(override)
+
+
+def test_load_config_rejects_non_positive_tts_sample_rate(tmp_path: Path) -> None:
+    override = tmp_path / "invalid_tts_sr.toml"
+    override.write_text(
+        "\n".join(
+            [
+                "[tts]",
+                "sample_rate = 0",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="tts.sample_rate"):
+        load_config(override)
+
+
+def test_load_config_rejects_negative_tts_duration_delta(tmp_path: Path) -> None:
+    override = tmp_path / "invalid_tts_delta.toml"
+    override.write_text(
+        "\n".join(
+            [
+                "[tts]",
+                "max_duration_delta_seconds = -0.01",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="tts.max_duration_delta_seconds"):
+        load_config(override)
+
+
+def test_load_config_rejects_tts_pitch_above_max(tmp_path: Path) -> None:
+    override = tmp_path / "invalid_tts_pitch.toml"
+    override.write_text(
+        "\n".join(
+            [
+                "[tts]",
+                "espeak_pitch = 120",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="tts.espeak_pitch"):
+        load_config(override)
+
+
+def test_load_config_rejects_tts_adaptive_rate_min_above_max(tmp_path: Path) -> None:
+    override = tmp_path / "invalid_tts_adaptive_range.toml"
+    override.write_text(
+        "\n".join(
+            [
+                "[tts]",
+                "espeak_adaptive_rate_min_wpm = 260",
+                "espeak_adaptive_rate_max_wpm = 150",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="tts.espeak_adaptive_rate_max_wpm"):
+        load_config(override)
+
+
+def test_load_config_rejects_non_positive_tts_adaptive_rate_passes(tmp_path: Path) -> None:
+    override = tmp_path / "invalid_tts_adaptive_passes.toml"
+    override.write_text(
+        "\n".join(
+            [
+                "[tts]",
+                "espeak_adaptive_rate_max_passes = 0",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="tts.espeak_adaptive_rate_max_passes"):
         load_config(override)

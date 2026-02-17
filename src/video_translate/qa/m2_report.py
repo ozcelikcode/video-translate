@@ -9,6 +9,7 @@ from video_translate.translate.glossary import contains_term
 
 
 _TERMINAL_PUNCTUATION = {".", "!", "?"}
+_PAUSE_PUNCTUATION = {",", ";", ":"}
 
 
 def _terminal_punctuation(text: str) -> str | None:
@@ -48,6 +49,44 @@ def build_m2_qa_report(
                 target_terminal_count += 1
             if source_terminal != target_terminal:
                 punctuation_mismatch_count += 1
+
+    long_segment_count = 0
+    long_segment_missing_terminal_count = 0
+    long_segment_excessive_pause_count = 0
+    fluency_issue_samples: list[dict[str, object]] = []
+    if config.qa_check_long_segment_fluency:
+        for segment in doc.segments:
+            target_text = segment.target_text.strip()
+            target_word_count = segment.target_word_count
+            if target_word_count < config.qa_long_segment_word_threshold:
+                continue
+            long_segment_count += 1
+
+            target_terminal = _terminal_punctuation(target_text)
+            if target_terminal is None:
+                long_segment_missing_terminal_count += 1
+                if len(fluency_issue_samples) < 20:
+                    fluency_issue_samples.append(
+                        {
+                            "segment_id": segment.id,
+                            "issue": "missing_terminal_punctuation",
+                            "target_word_count": target_word_count,
+                        }
+                    )
+
+            pause_punct_count = sum(target_text.count(mark) for mark in _PAUSE_PUNCTUATION)
+            if pause_punct_count > config.qa_long_segment_max_pause_punct:
+                long_segment_excessive_pause_count += 1
+                if len(fluency_issue_samples) < 20:
+                    fluency_issue_samples.append(
+                        {
+                            "segment_id": segment.id,
+                            "issue": "excessive_pause_punctuation",
+                            "target_word_count": target_word_count,
+                            "pause_punctuation_count": pause_punct_count,
+                            "max_allowed": config.qa_long_segment_max_pause_punct,
+                        }
+                    )
 
     glossary_map = glossary or {}
     expected_term_count = 0
@@ -90,6 +129,11 @@ def build_m2_qa_report(
         quality_flags.append("terminal_punctuation_mismatch_present")
     if missed_term_count > 0:
         quality_flags.append("glossary_term_miss_present")
+    if (
+        config.qa_check_long_segment_fluency
+        and (long_segment_missing_terminal_count > 0 or long_segment_excessive_pause_count > 0)
+    ):
+        quality_flags.append("long_segment_fluency_issue_present")
 
     return {
         "stage": "m2",
@@ -118,6 +162,15 @@ def build_m2_qa_report(
             "source_terminal_count": source_terminal_count,
             "target_terminal_count": target_terminal_count,
             "mismatch_count": punctuation_mismatch_count,
+        },
+        "fluency_metrics": {
+            "enabled": config.qa_check_long_segment_fluency,
+            "long_segment_word_threshold": config.qa_long_segment_word_threshold,
+            "long_segment_max_pause_punct": config.qa_long_segment_max_pause_punct,
+            "long_segment_count": long_segment_count,
+            "missing_terminal_count": long_segment_missing_terminal_count,
+            "excessive_pause_count": long_segment_excessive_pause_count,
+            "issue_samples": fluency_issue_samples,
         },
         "terminology_metrics": {
             "glossary_path": str(config.glossary_path) if config.glossary_path else None,

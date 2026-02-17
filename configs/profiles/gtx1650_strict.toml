@@ -2,9 +2,7 @@
 model = "small"
 device = "cuda"
 compute_type = "int8_float16"
-beam_size = 3
-word_timestamps = false
-vad_filter = true
+beam_size = 5
 fallback_on_oom = true
 fallback_model = "small"
 fallback_device = "cpu"
@@ -12,25 +10,25 @@ fallback_compute_type = "int8"
 
 [translate]
 backend = "transformers"
-batch_size = 6
+batch_size = 4
 source_language = "en"
 target_language = "tr"
-min_length_ratio = 0.45
-max_length_ratio = 1.90
+min_length_ratio = 0.50
+max_length_ratio = 1.80
 glossary_path = "configs/glossary.en-tr.json"
 glossary_case_sensitive = false
 apply_glossary_postprocess = true
 qa_check_terminal_punctuation = true
 qa_check_long_segment_fluency = true
 qa_long_segment_word_threshold = 14
-qa_long_segment_max_pause_punct = 4
-qa_fail_on_flags = false
+qa_long_segment_max_pause_punct = 3
+qa_fail_on_flags = true
 qa_allowed_flags = []
 
 [translate.transformers]
 model_id = "facebook/m2m100_418M"
 device = -1
-max_new_tokens = 160
+max_new_tokens = 192
 source_lang_code = "en"
 target_lang_code = "tr"
 
@@ -41,13 +39,13 @@ min_segment_seconds = 0.12
 mock_base_tone_hz = 220
 espeak_bin = "espeak"
 espeak_voice = "tr"
-espeak_speed_wpm = 175
+espeak_speed_wpm = 165
 espeak_pitch = 50
 espeak_adaptive_rate_enabled = true
-espeak_adaptive_rate_min_wpm = 125
-espeak_adaptive_rate_max_wpm = 280
-espeak_adaptive_rate_max_passes = 2
-espeak_adaptive_rate_tolerance_seconds = 0.08
-max_duration_delta_seconds = 0.10
-qa_fail_on_flags = false
+espeak_adaptive_rate_min_wpm = 120
+espeak_adaptive_rate_max_wpm = 250
+espeak_adaptive_rate_max_passes = 4
+espeak_adaptive_rate_tolerance_seconds = 0.05
+max_duration_delta_seconds = 0.08
+qa_fail_on_flags = true
 qa_allowed_flags = []

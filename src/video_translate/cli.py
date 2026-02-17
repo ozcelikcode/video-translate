@@ -9,6 +9,8 @@ from video_translate.pipeline.m1 import run_m1_pipeline
 from video_translate.pipeline.m2_benchmark import run_m2_profile_benchmark
 from video_translate.pipeline.m2 import run_m2_pipeline
 from video_translate.pipeline.m2_prep import prepare_m2_translation_input
+from video_translate.pipeline.m3 import run_m3_pipeline
+from video_translate.pipeline.m3_prep import prepare_m3_tts_input
 from video_translate.preflight import preflight_errors, run_preflight
 from video_translate.utils.subprocess_utils import CommandExecutionError
 
@@ -27,7 +29,10 @@ def doctor(
         yt_dlp_bin=config.tools.yt_dlp,
         ffmpeg_bin=config.tools.ffmpeg,
         translate_backend=config.translate.backend,
+        tts_backend=config.tts.backend,
+        espeak_bin=config.tts.espeak_bin,
         check_translate_backend=True,
+        check_tts_backend=True,
     )
     errors = preflight_errors(report)
 
@@ -39,6 +44,8 @@ def doctor(
         typer.echo(f"transformers: {'OK' if report.transformers_available else 'MISSING'}")
         typer.echo(f"sentencepiece: {'OK' if report.sentencepiece_available else 'MISSING'}")
         typer.echo(f"torch: {'OK' if report.torch_available else 'MISSING'}")
+    if report.tts_backend == "espeak":
+        typer.echo(f"espeak: {report.espeak.path if report.espeak and report.espeak.path else 'MISSING'}")
 
     if errors:
         for error in errors:
@@ -104,6 +111,67 @@ def prepare_m2(
     typer.echo(f"M2 translation input: {output_path}")
 
 
+@app.command("prepare-m3")
+def prepare_m3(
+    run_root: Path | None = typer.Option(
+        None, "--run-root", help="Run root directory created by run-m1."
+    ),
+    translation_output_json: Path | None = typer.Option(
+        None,
+        "--translation-output-json",
+        help="Explicit path to M2 translation output JSON. If set, --run-root is optional.",
+    ),
+    output_json: Path | None = typer.Option(
+        None,
+        "--output-json",
+        help="Optional explicit output JSON path for M3 TTS input contract.",
+    ),
+    target_lang: str | None = typer.Option(
+        None,
+        "--target-lang",
+        help="Optional override for target language code.",
+    ),
+) -> None:
+    """Prepare M3 TTS input contract from M2 translation output."""
+    source_output = translation_output_json
+    if source_output is None:
+        if run_root is None:
+            raise typer.BadParameter(
+                "Either --run-root or --translation-output-json must be provided."
+            )
+        selected_lang = target_lang or "tr"
+        source_output = (
+            run_root / "output" / "translate" / f"translation_output.en-{selected_lang}.json"
+        )
+
+    resolved_output = output_json
+    if resolved_output is None:
+        if run_root is not None:
+            selected_lang = target_lang or "tr"
+            resolved_output = run_root / "output" / "tts" / f"tts_input.{selected_lang}.json"
+        else:
+            lang_suffix = target_lang or "tr"
+            resolved_output = source_output.parent.parent / "tts" / f"tts_input.{lang_suffix}.json"
+
+    try:
+        output_path = prepare_m3_tts_input(
+            translation_output_json_path=source_output,
+            output_json_path=resolved_output,
+            target_language=target_lang,
+        )
+    except FileNotFoundError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=12) from exc
+    except ValueError as exc:
+        typer.echo(f"Invalid input for M3 prep: {exc}", err=True)
+        raise typer.Exit(code=13) from exc
+    except Exception as exc:  # noqa: BLE001
+        typer.echo(f"Unexpected M3 prep failure: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+
+    typer.echo(f"M3 TTS input: {output_path}")
+
+
 @app.command("run-m1")
 def run_m1(
     url: str = typer.Option(..., "--url", help="YouTube video URL."),
@@ -121,7 +189,10 @@ def run_m1(
             yt_dlp_bin=config.tools.yt_dlp,
             ffmpeg_bin=config.tools.ffmpeg,
             translate_backend=config.translate.backend,
+            tts_backend=config.tts.backend,
+            espeak_bin=config.tts.espeak_bin,
             check_translate_backend=False,
+            check_tts_backend=False,
         )
         errors = preflight_errors(preflight_report)
         if errors:
@@ -189,7 +260,10 @@ def run_m2(
         yt_dlp_bin=config.tools.yt_dlp,
         ffmpeg_bin=config.tools.ffmpeg,
         translate_backend=config.translate.backend,
+        tts_backend=config.tts.backend,
+        espeak_bin=config.tts.espeak_bin,
         check_translate_backend=True,
+        check_tts_backend=False,
     )
     preflight_issue_list = preflight_errors(preflight_report)
     if preflight_issue_list:
@@ -256,6 +330,97 @@ def run_m2(
     typer.echo(f"M2 output: {artifacts.translation_output_json}")
     typer.echo(f"M2 QA report: {artifacts.qa_report_json}")
     typer.echo(f"M2 run manifest: {artifacts.run_manifest_json}")
+
+
+@app.command("run-m3")
+def run_m3(
+    run_root: Path | None = typer.Option(
+        None, "--run-root", help="Run root directory created by run-m1."
+    ),
+    tts_input: Path | None = typer.Option(
+        None,
+        "--tts-input",
+        help="Path to M3 TTS input contract. If omitted, derived from --run-root.",
+    ),
+    output_json: Path | None = typer.Option(
+        None, "--output-json", help="Optional explicit M3 output JSON path."
+    ),
+    qa_report_json: Path | None = typer.Option(
+        None, "--qa-report-json", help="Optional explicit M3 QA report JSON path."
+    ),
+    target_lang: str = typer.Option("tr", "--target-lang", help="Target language code."),
+    config_path: Path | None = typer.Option(
+        None, "--config", help="Optional TOML config file to override defaults."
+    ),
+) -> None:
+    """Run M3 pipeline: local TTS segment synthesis + QA report."""
+    config = load_config(config_path)
+    preflight_report = run_preflight(
+        yt_dlp_bin=config.tools.yt_dlp,
+        ffmpeg_bin=config.tools.ffmpeg,
+        translate_backend=config.translate.backend,
+        tts_backend=config.tts.backend,
+        espeak_bin=config.tts.espeak_bin,
+        check_translate_backend=False,
+        check_tts_backend=True,
+    )
+    preflight_issue_list = preflight_errors(preflight_report)
+    if preflight_issue_list:
+        for issue in preflight_issue_list:
+            typer.echo(f"- {issue}", err=True)
+        raise typer.Exit(code=4)
+
+    resolved_input = tts_input
+    if resolved_input is None:
+        if run_root is None:
+            raise typer.BadParameter("Either --run-root or --tts-input must be provided.")
+        resolved_input = run_root / "output" / "tts" / f"tts_input.{target_lang}.json"
+
+    resolved_output = output_json
+    if resolved_output is None:
+        if run_root is not None:
+            resolved_output = run_root / "output" / "tts" / f"tts_output.{target_lang}.json"
+        else:
+            resolved_output = resolved_input.parent / f"tts_output.{target_lang}.json"
+
+    resolved_qa_report = qa_report_json
+    if resolved_qa_report is None:
+        if run_root is not None:
+            resolved_qa_report = run_root / "output" / "qa" / "m3_qa_report.json"
+        else:
+            resolved_qa_report = resolved_input.parent.parent / "qa" / "m3_qa_report.json"
+
+    if run_root is not None:
+        resolved_manifest = run_root / "run_m3_manifest.json"
+    else:
+        resolved_manifest = resolved_input.parent.parent.parent / "run_m3_manifest.json"
+
+    try:
+        artifacts = run_m3_pipeline(
+            tts_input_json_path=resolved_input,
+            output_json_path=resolved_output,
+            qa_report_json_path=resolved_qa_report,
+            run_manifest_json_path=resolved_manifest,
+            config=config,
+        )
+    except FileNotFoundError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=14) from exc
+    except ValueError as exc:
+        typer.echo(f"Invalid input for M3 run: {exc}", err=True)
+        raise typer.Exit(code=15) from exc
+    except RuntimeError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=16) from exc
+    except Exception as exc:  # noqa: BLE001
+        typer.echo(f"Unexpected M3 pipeline failure: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+
+    typer.echo(f"M3 input: {artifacts.tts_input_json}")
+    typer.echo(f"M3 output: {artifacts.tts_output_json}")
+    typer.echo(f"M3 QA report: {artifacts.qa_report_json}")
+    typer.echo(f"M3 stitched preview: {artifacts.stitched_preview_wav}")
+    typer.echo(f"M3 run manifest: {artifacts.run_manifest_json}")
 
 
 @app.command("benchmark-m2")

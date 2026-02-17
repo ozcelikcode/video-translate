@@ -57,7 +57,32 @@ class TranslateConfig:
     glossary_case_sensitive: bool
     apply_glossary_postprocess: bool
     qa_check_terminal_punctuation: bool
+    qa_check_long_segment_fluency: bool
+    qa_long_segment_word_threshold: int
+    qa_long_segment_max_pause_punct: int
+    qa_fail_on_flags: bool
+    qa_allowed_flags: tuple[str, ...]
     transformers: TranslateTransformersConfig
+
+
+@dataclass(frozen=True)
+class TTSConfig:
+    backend: str
+    sample_rate: int
+    min_segment_seconds: float
+    mock_base_tone_hz: int
+    espeak_bin: str
+    espeak_voice: str
+    espeak_speed_wpm: int
+    espeak_pitch: int
+    espeak_adaptive_rate_enabled: bool
+    espeak_adaptive_rate_min_wpm: int
+    espeak_adaptive_rate_max_wpm: int
+    espeak_adaptive_rate_max_passes: int
+    espeak_adaptive_rate_tolerance_seconds: float
+    max_duration_delta_seconds: float
+    qa_fail_on_flags: bool
+    qa_allowed_flags: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -66,6 +91,7 @@ class AppConfig:
     pipeline: PipelineConfig
     asr: ASRConfig
     translate: TranslateConfig
+    tts: TTSConfig
 
 
 def _required_non_empty_str(value: object, field: str) -> str:
@@ -82,10 +108,36 @@ def _required_positive_int(value: object, field: str) -> int:
     return parsed
 
 
+def _required_non_negative_int(value: object, field: str) -> int:
+    parsed = int(value)
+    if parsed < 0:
+        raise ValueError(f"Config field '{field}' must be >= 0.")
+    return parsed
+
+
+def _optional_str_tuple(value: object, field: str) -> tuple[str, ...]:
+    if value is None:
+        return ()
+    if not isinstance(value, list):
+        raise ValueError(f"Config field '{field}' must be a list of strings.")
+    normalized: list[str] = []
+    for index, item in enumerate(value):
+        text = _required_non_empty_str(item, f"{field}[{index}]")
+        normalized.append(text)
+    return tuple(normalized)
+
+
 def _required_positive_float(value: object, field: str) -> float:
     parsed = float(value)
     if parsed <= 0.0:
         raise ValueError(f"Config field '{field}' must be > 0.")
+    return parsed
+
+
+def _required_non_negative_float(value: object, field: str) -> float:
+    parsed = float(value)
+    if parsed < 0.0:
+        raise ValueError(f"Config field '{field}' must be >= 0.")
     return parsed
 
 
@@ -120,6 +172,7 @@ def load_config(config_path: Path | None = None) -> AppConfig:
     pipeline_table = data.get("pipeline", {})
     asr_table = data.get("asr", {})
     translate_table = data.get("translate", {})
+    tts_table = data.get("tts", {})
     translate_transformers_table = translate_table.get("transformers", {})
 
     yt_dlp = _required_non_empty_str(tools_table.get("yt_dlp", "yt-dlp"), "tools.yt_dlp")
@@ -211,6 +264,77 @@ def load_config(config_path: Path | None = None) -> AppConfig:
     qa_check_terminal_punctuation = bool(
         translate_table.get("qa_check_terminal_punctuation", True)
     )
+    qa_check_long_segment_fluency = bool(
+        translate_table.get("qa_check_long_segment_fluency", True)
+    )
+    qa_long_segment_word_threshold = _required_positive_int(
+        translate_table.get("qa_long_segment_word_threshold", 14),
+        "translate.qa_long_segment_word_threshold",
+    )
+    qa_long_segment_max_pause_punct = _required_non_negative_int(
+        translate_table.get("qa_long_segment_max_pause_punct", 3),
+        "translate.qa_long_segment_max_pause_punct",
+    )
+    qa_fail_on_flags = bool(translate_table.get("qa_fail_on_flags", False))
+    qa_allowed_flags = _optional_str_tuple(
+        translate_table.get("qa_allowed_flags", []),
+        "translate.qa_allowed_flags",
+    )
+    tts_backend = _required_non_empty_str(tts_table.get("backend", "mock"), "tts.backend")
+    tts_sample_rate = _required_positive_int(tts_table.get("sample_rate", 24000), "tts.sample_rate")
+    tts_min_segment_seconds = _required_positive_float(
+        tts_table.get("min_segment_seconds", 0.12),
+        "tts.min_segment_seconds",
+    )
+    tts_mock_base_tone_hz = _required_positive_int(
+        tts_table.get("mock_base_tone_hz", 220),
+        "tts.mock_base_tone_hz",
+    )
+    tts_espeak_bin = _required_non_empty_str(tts_table.get("espeak_bin", "espeak"), "tts.espeak_bin")
+    tts_espeak_voice = _required_non_empty_str(tts_table.get("espeak_voice", "tr"), "tts.espeak_voice")
+    tts_espeak_speed_wpm = _required_positive_int(
+        tts_table.get("espeak_speed_wpm", 165),
+        "tts.espeak_speed_wpm",
+    )
+    tts_espeak_pitch = _required_non_negative_int(
+        tts_table.get("espeak_pitch", 50),
+        "tts.espeak_pitch",
+    )
+    if tts_espeak_pitch > 99:
+        raise ValueError("Config field 'tts.espeak_pitch' must be <= 99.")
+    tts_espeak_adaptive_rate_enabled = bool(
+        tts_table.get("espeak_adaptive_rate_enabled", True)
+    )
+    tts_espeak_adaptive_rate_min_wpm = _required_positive_int(
+        tts_table.get("espeak_adaptive_rate_min_wpm", 120),
+        "tts.espeak_adaptive_rate_min_wpm",
+    )
+    tts_espeak_adaptive_rate_max_wpm = _required_positive_int(
+        tts_table.get("espeak_adaptive_rate_max_wpm", 260),
+        "tts.espeak_adaptive_rate_max_wpm",
+    )
+    if tts_espeak_adaptive_rate_max_wpm < tts_espeak_adaptive_rate_min_wpm:
+        raise ValueError(
+            "Config field 'tts.espeak_adaptive_rate_max_wpm' must be >= "
+            "'tts.espeak_adaptive_rate_min_wpm'."
+        )
+    tts_espeak_adaptive_rate_max_passes = _required_positive_int(
+        tts_table.get("espeak_adaptive_rate_max_passes", 3),
+        "tts.espeak_adaptive_rate_max_passes",
+    )
+    tts_espeak_adaptive_rate_tolerance_seconds = _required_non_negative_float(
+        tts_table.get("espeak_adaptive_rate_tolerance_seconds", 0.06),
+        "tts.espeak_adaptive_rate_tolerance_seconds",
+    )
+    tts_max_duration_delta_seconds = _required_non_negative_float(
+        tts_table.get("max_duration_delta_seconds", 0.08),
+        "tts.max_duration_delta_seconds",
+    )
+    tts_qa_fail_on_flags = bool(tts_table.get("qa_fail_on_flags", False))
+    tts_qa_allowed_flags = _optional_str_tuple(
+        tts_table.get("qa_allowed_flags", []),
+        "tts.qa_allowed_flags",
+    )
 
     return AppConfig(
         tools=ToolConfig(
@@ -247,6 +371,11 @@ def load_config(config_path: Path | None = None) -> AppConfig:
             glossary_case_sensitive=glossary_case_sensitive,
             apply_glossary_postprocess=apply_glossary_postprocess,
             qa_check_terminal_punctuation=qa_check_terminal_punctuation,
+            qa_check_long_segment_fluency=qa_check_long_segment_fluency,
+            qa_long_segment_word_threshold=qa_long_segment_word_threshold,
+            qa_long_segment_max_pause_punct=qa_long_segment_max_pause_punct,
+            qa_fail_on_flags=qa_fail_on_flags,
+            qa_allowed_flags=qa_allowed_flags,
             transformers=TranslateTransformersConfig(
                 model_id=transformers_model_id,
                 device=transformers_device,
@@ -254,5 +383,23 @@ def load_config(config_path: Path | None = None) -> AppConfig:
                 source_lang_code=source_lang_code,
                 target_lang_code=target_lang_code,
             ),
+        ),
+        tts=TTSConfig(
+            backend=tts_backend,
+            sample_rate=tts_sample_rate,
+            min_segment_seconds=tts_min_segment_seconds,
+            mock_base_tone_hz=tts_mock_base_tone_hz,
+            espeak_bin=tts_espeak_bin,
+            espeak_voice=tts_espeak_voice,
+            espeak_speed_wpm=tts_espeak_speed_wpm,
+            espeak_pitch=tts_espeak_pitch,
+            espeak_adaptive_rate_enabled=tts_espeak_adaptive_rate_enabled,
+            espeak_adaptive_rate_min_wpm=tts_espeak_adaptive_rate_min_wpm,
+            espeak_adaptive_rate_max_wpm=tts_espeak_adaptive_rate_max_wpm,
+            espeak_adaptive_rate_max_passes=tts_espeak_adaptive_rate_max_passes,
+            espeak_adaptive_rate_tolerance_seconds=tts_espeak_adaptive_rate_tolerance_seconds,
+            max_duration_delta_seconds=tts_max_duration_delta_seconds,
+            qa_fail_on_flags=tts_qa_fail_on_flags,
+            qa_allowed_flags=tts_qa_allowed_flags,
         ),
     )

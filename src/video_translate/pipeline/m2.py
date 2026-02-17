@@ -47,6 +47,15 @@ def _build_unique_text_index(texts: list[str]) -> tuple[list[str], list[int]]:
     return unique_texts, text_to_unique_index
 
 
+def _blocked_quality_flags(qa_report: dict[str, Any], allowed_flags: tuple[str, ...]) -> list[str]:
+    allowed = set(allowed_flags)
+    raw_flags = qa_report.get("quality_flags", [])
+    if not isinstance(raw_flags, list):
+        return []
+    normalized = [str(flag) for flag in raw_flags]
+    return [flag for flag in normalized if flag not in allowed]
+
+
 def run_m2_pipeline(
     *,
     translation_input_json_path: Path,
@@ -124,6 +133,8 @@ def run_m2_pipeline(
     write_json(output_json_path, output_doc.to_dict())
     write_json(qa_report_json_path, qa_report)
     write_seconds = perf_counter() - write_start
+    blocked_flags = _blocked_quality_flags(qa_report, config.translate.qa_allowed_flags)
+    qa_gate_passed = not blocked_flags
     total_seconds = perf_counter() - pipeline_start
     write_json(
         run_manifest_json_path,
@@ -151,8 +162,18 @@ def run_m2_pipeline(
                 "write_outputs": write_seconds,
                 "total_pipeline": total_seconds,
             },
+            "qa_gate": {
+                "enabled": config.translate.qa_fail_on_flags,
+                "passed": qa_gate_passed,
+                "allowed_flags": list(config.translate.qa_allowed_flags),
+                "blocked_flags": blocked_flags,
+            },
         },
     )
+    if config.translate.qa_fail_on_flags and not qa_gate_passed:
+        raise RuntimeError(
+            "M2 QA gate failed. Blocked quality flags: " + ", ".join(blocked_flags)
+        )
 
     return M2Artifacts(
         translation_input_json=translation_input_json_path,

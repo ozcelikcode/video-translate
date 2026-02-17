@@ -20,8 +20,13 @@ def _translate_config() -> TranslateConfig:
         glossary_case_sensitive=False,
         apply_glossary_postprocess=True,
         qa_check_terminal_punctuation=True,
+        qa_check_long_segment_fluency=True,
+        qa_long_segment_word_threshold=6,
+        qa_long_segment_max_pause_punct=2,
+        qa_fail_on_flags=False,
+        qa_allowed_flags=(),
         transformers=TranslateTransformersConfig(
-            model_id="Helsinki-NLP/opus-mt-en-tr",
+            model_id="facebook/m2m100_418M",
             device=-1,
             max_new_tokens=256,
             source_lang_code=None,
@@ -89,3 +94,45 @@ def test_build_m2_qa_report_with_glossary_and_punctuation_flags() -> None:
     flags = report["quality_flags"]
     assert isinstance(flags, list)
     assert "terminal_punctuation_mismatch_present" in flags
+
+
+def test_build_m2_qa_report_long_segment_fluency_flags() -> None:
+    input_doc = parse_translation_input_document(
+        {
+            "schema_version": "1.0",
+            "stage": "m2_translation_input",
+            "generated_at_utc": "2026-02-16T10:00:00Z",
+            "source_language": "en",
+            "target_language": "tr",
+            "segment_count": 1,
+            "total_source_word_count": 10,
+            "segments": [
+                {
+                    "id": 0,
+                    "start": 0.0,
+                    "end": 4.0,
+                    "duration": 4.0,
+                    "source_text": "This is a longer source sentence for quality checks.",
+                    "source_word_count": 9,
+                }
+            ],
+        }
+    )
+    output_doc = build_translation_output_document(
+        input_doc=input_doc,
+        translated_texts=[
+            "bu daha uzun bir ceviri metni, cok fazla ara duraklama, ritmi bozuyor, akiciligi dusuruyor",
+        ],
+        backend="mock",
+    )
+    report = build_m2_qa_report(output_doc, _translate_config(), glossary={})
+
+    fluency_metrics = report["fluency_metrics"]
+    assert isinstance(fluency_metrics, dict)
+    assert fluency_metrics["long_segment_count"] == 1
+    assert fluency_metrics["missing_terminal_count"] == 1
+    assert fluency_metrics["excessive_pause_count"] == 1
+
+    flags = report["quality_flags"]
+    assert isinstance(flags, list)
+    assert "long_segment_fluency_issue_present" in flags

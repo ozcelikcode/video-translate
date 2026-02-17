@@ -32,6 +32,11 @@ glossary_path = "configs/glossary.en-tr.json"
 glossary_case_sensitive = false
 apply_glossary_postprocess = true
 qa_check_terminal_punctuation = true
+qa_check_long_segment_fluency = true
+qa_long_segment_word_threshold = 14
+qa_long_segment_max_pause_punct = 3
+qa_fail_on_flags = false
+qa_allowed_flags = []
 
 [translate.transformers]
 model_id = "facebook/m2m100_418M"
@@ -39,3 +44,21 @@ device = -1
 max_new_tokens = 256
 source_lang_code = "en"
 target_lang_code = "tr"
+
+[tts]
+backend = "mock"
+sample_rate = 24000
+min_segment_seconds = 0.12
+mock_base_tone_hz = 220
+espeak_bin = "espeak"
+espeak_voice = "tr"
+espeak_speed_wpm = 165
+espeak_pitch = 50
+espeak_adaptive_rate_enabled = true
+espeak_adaptive_rate_min_wpm = 120
+espeak_adaptive_rate_max_wpm = 260
+espeak_adaptive_rate_max_passes = 3
+espeak_adaptive_rate_tolerance_seconds = 0.06
+max_duration_delta_seconds = 0.08
+qa_fail_on_flags = false
+qa_allowed_flags = []
