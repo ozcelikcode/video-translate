@@ -62,6 +62,9 @@
 - M2 ceviri cikti katmaninda UTF-8 mojibake onarim heuristigi aktif
 - M3 hazirlik: `prepare-m3` ile TTS input sozlesmesi uretimi
 - M3 calistirma: `run-m3` ile TTS cikti + QA uretimi
+- M3 benchmark: `benchmark-m3` ile profil karsilastirma
+- M3 tuning markdown raporu: `report-m3-tuning`
+- M3 lokal UI demo: `ui-demo`
 - M3 backend: `mock` ve `espeak` (yerel, API'siz)
 - M3 backend modulu: `src/video_translate/tts/backends.py`
 - M3 contract modulu: `src/video_translate/tts/contracts.py`
@@ -87,7 +90,10 @@
   - `tts.qa_fail_on_flags`
   - `tts.qa_allowed_flags`
 - M3 run manifest: `run_m3_manifest.json`
-- Son tam test sonucu: `47 passed` (2026-02-17)
+- M3 benchmark raporu: `benchmarks/m3_profile_benchmark.json`
+- M3 tuning raporu: `benchmarks/m3_tuning_report.md`
+- UI demo dokumani: `docs/ui-demo.md`
+- Son tam test sonucu: `50 passed` (2026-02-17)
 
 ## Handoff Teknik Notlari
 - M3 icin harici API kullanilmiyor; mevcut backend tamamen yerel dosya uretimi yapiyor.

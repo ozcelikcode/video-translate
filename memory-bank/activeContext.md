@@ -4,7 +4,7 @@
 M3 gercek yerel TTS backend'e gecis baslatildi (`espeak`). Simdi odak sure uyumu ve ritim adaptasyonunu iyilestirmek.
 
 ## Handoff Snapshot (2026-02-17)
-- Son test durumu: `python -m pytest -q` -> `47 passed`.
+- Son test durumu: `python -m pytest -q` -> `50 passed`.
 - CLI komutlari:
   - `doctor`
   - `run-m1`
@@ -13,6 +13,9 @@ M3 gercek yerel TTS backend'e gecis baslatildi (`espeak`). Simdi odak sure uyumu
   - `benchmark-m2`
   - `prepare-m3`
   - `run-m3`
+  - `benchmark-m3`
+  - `report-m3-tuning`
+  - `ui-demo`
 - M3 su an `mock` ve `espeak` backendleri ile calisiyor.
 - Calisma agaci temiz degil (commit edilmemis degisiklikler var).
 - Eklenen yeni M3 dosyalari:
@@ -109,6 +112,21 @@ M3 gercek yerel TTS backend'e gecis baslatildi (`espeak`). Simdi odak sure uyumu
   - hedef sureye gore hiz guncelleme (bounded retry)
   - yeni config alanlari: `espeak_adaptive_rate_*`
 - GTX1650 profilleri ve varsayilan config bu yeni TTS alanlariyla guncellendi.
+- M3 profile benchmark komutu eklendi (`benchmark-m3`).
+- Yeni benchmark pipeline: `src/video_translate/pipeline/m3_benchmark.py`
+- M3 benchmark raporu uretimi dogrulandi:
+  - `runs/finalize_m1m2/m1_real_medium_cpu/benchmarks/m3_profile_benchmark.json`
+- M3 benchmark stitched preview dosyalari profil bazli ayrildi:
+  - `benchmarks/tts_preview_stitched.<profile>.wav`
+- M3 tuning markdown rapor komutu eklendi:
+  - `report-m3-tuning`
+  - pipeline: `src/video_translate/pipeline/m3_tuning_report.py`
+- Gercek run uzerinde tuning raporu uretildi:
+  - `runs/finalize_m1m2/m1_real_medium_cpu/benchmarks/m3_tuning_report.md`
+- M3 backend ile bagli lokal UI demo eklendi:
+  - `src/video_translate/ui_demo.py`
+  - `video-translate ui-demo --host 127.0.0.1 --port 8765`
+  - test: `tests/test_ui_demo.py`
 
 ## Aktif Kararlar
 - Gelistirme `M1 -> M5` kademeleriyle ilerleyecek.
@@ -120,6 +138,9 @@ M3 gercek yerel TTS backend'e gecis baslatildi (`espeak`). Simdi odak sure uyumu
 - M3 segment sure uyumunu gelistirmek (konusma hizi/pause adaptasyonu).
 - M3 `espeak` ses/rate/pitch parametrelerini gercek veriyle tune etmek.
 - M3 `espeak` backend icin kabul esiklerini (`max_duration_delta_seconds`) profil bazli netlestirmek.
+- `benchmark-m3` raporuna gore `espeak` profil tuning tablosunu cikarmak.
+- `m3_tuning_report.md` uzerinden kalici profil secimini netlestirmek.
+- UI demo uzerinden M3 akisinin manuel UX testlerini yapmak.
 
 ## Sonraki Model Icin Net Baslangic Akisi
 1. `git status --short` ile degisiklikleri gor.

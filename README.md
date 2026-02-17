@@ -69,6 +69,14 @@ Run M3 local TTS:
 video-translate run-m3 --run-root runs/m1_YYYYMMDD_HHMMSS
 ```
 
+Run lightweight local M3 UI demo:
+
+```bash
+video-translate ui-demo --host 127.0.0.1 --port 8765
+```
+
+Then open `http://127.0.0.1:8765` in browser.
+
 Run M3 with local `espeak` Turkish voice:
 
 ```bash
@@ -94,6 +102,7 @@ M3 outputs:
 - `output/tts/segments/seg_XXXXXX.wav`
 - `output/qa/m3_qa_report.json`
 - `run_m3_manifest.json`
+- `output/tts/tts_preview_stitched.tr.wav`
 
 M3 supports these local backends:
 - `mock` (pipeline validation)

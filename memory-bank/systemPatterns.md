@@ -79,6 +79,27 @@ Pipeline tabanli, moduler, asamali genisletilebilir bir mimari.
   - `tts.qa_fail_on_flags=true` ise pipeline `RuntimeError` ile durur
   - `run_m3_manifest.json` icinde `qa_gate` sonucu yazilir
 
+## M3 Benchmark Akisi
+- `cli.benchmark-m3` -> `pipeline.m3_benchmark.run_m3_profile_benchmark`
+- Ayni `tts_input` uzerinde coklu profil calistirma
+- Cikti: `benchmarks/m3_profile_benchmark.json`
+- Rapor: profil bazli status + sure + max sure sapmasi + kalite flag + onerilen profil
+- Benchmark icin stitched preview dosyalari profil bazli ayrilir:
+  - `benchmarks/tts_preview_stitched.<profile>.wav`
+
+## M3 Tuning Raporu Akisi
+- `cli.report-m3-tuning` -> `pipeline.m3_tuning_report.build_m3_tuning_report_markdown`
+- Girdi: `benchmarks/m3_profile_benchmark.json`
+- Cikti: `benchmarks/m3_tuning_report.md`
+- Rapor icerigi: onerilen profil + profil bazli markdown tablo + ranking
+
+## M3 UI Demo Akisi
+- `cli.ui-demo` -> `ui_demo.run_ui_demo_server`
+- Lokal HTTP panel, backend fonksiyonlarini dogrudan cagirir:
+  - `pipeline.m3_prep.prepare_m3_tts_input` (opsiyonel)
+  - `pipeline.m3.run_m3_pipeline`
+- Cikti: JSON sonucunda M3 artefakt yollari + QA ozeti + segment preview
+
 ## M3 Contract Ozet
 - M3 input stage: `m3_tts_input`
   - Segment alanlari: `id/start/end/duration/target_text/target_word_count`

@@ -56,6 +56,14 @@ M1 ve M2 tamamlandi (%100), M3 aktif gelistirme asamasinda.
 - M3 run manifest `outputs` alanina `stitched_preview_wav` eklendi.
 - M3 `espeak` backend'e adaptif speaking-rate mekanizmasi eklendi.
 - TTS config'e adaptif hiz alanlari eklendi (`espeak_adaptive_rate_*`).
+- M3 benchmark komutu eklendi (`benchmark-m3`).
+- M3 benchmark raporu eklendi (`benchmarks/m3_profile_benchmark.json`).
+- Benchmark stitched preview dosyalari profil bazli ayrildi (`benchmarks/tts_preview_stitched.<profile>.wav`).
+- M3 tuning markdown rapor komutu eklendi (`report-m3-tuning`).
+- M3 tuning raporu eklendi (`benchmarks/m3_tuning_report.md`).
+- M3 lokal UI demo komutu eklendi (`ui-demo`).
+- M3 UI demo backend akisi eklendi (`src/video_translate/ui_demo.py`).
+- M3 UI demo testi eklendi (`tests/test_ui_demo.py`).
 - TTS konfigurasyon blogu eklendi (`[tts]`).
 - TTS config'e `espeak` alanlari eklendi (`espeak_bin/voice/speed/pitch`).
 - Doctor/preflight `espeak` binary kontrolu eklendi.
@@ -64,7 +72,7 @@ M1 ve M2 tamamlandi (%100), M3 aktif gelistirme asamasinda.
 - M2 milestone dokumani baslatildi.
 - M3 milestone dokumani baslatildi.
 - Temel birim testleri genisletildi ve gecti.
-- Son test sonucu: `47 passed` (2026-02-17).
+- Son test sonucu: `50 passed` (2026-02-17).
 
 ## Calisma Agaci Durumu (Handoff)
 - Commit edilmemis degisiklikler mevcut.
@@ -90,12 +98,15 @@ M1 ve M2 tamamlandi (%100), M3 aktif gelistirme asamasinda.
 - M3 sure uyumunu gelistirmek (konusma hizi/pause adaptasyonu).
 - M3 `espeak` voice/rate/pitch profil tuning tablosu olusturmak.
 - M3 adaptif hiz parametrelerini gercek veri ile kalibre etmek (min/max/pass/tolerance).
+- `benchmark-m3` sonucuna gore onerilen M3 profili sabitlemek.
+- `m3_tuning_report.md` uzerinden profil secim kararini dokumante etmek.
+- UI uzerinden M3 akisini manuel test edip UX notlarini toplamak.
 
 ## Tamamlama Tahmini (2026-02-17)
-- Genel tamamlanma: `%74` (tahmini)
+- Genel tamamlanma: `%80` (tahmini)
 - `M1`: `%100` (gercek URL calismasi + QA raporu tamam)
 - `M2`: `%100` (gercek ceviri kosusu + QA + benchmark tamam)
-- `M3`: `%56` (stitched preview + adaptif hiz tamam; saha tuning ve ritim mikro-iyilestirme eksik)
+- `M3`: `%70` (stitched preview + adaptif hiz + m3 benchmark + tuning raporu + ui demo tamam; saha tuning ve ritim mikro-iyilestirme eksik)
 - `M4`: `%0`
 - `M5`: `%0`
 

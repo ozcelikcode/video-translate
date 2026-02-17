@@ -10,8 +10,11 @@ from video_translate.pipeline.m2_benchmark import run_m2_profile_benchmark
 from video_translate.pipeline.m2 import run_m2_pipeline
 from video_translate.pipeline.m2_prep import prepare_m2_translation_input
 from video_translate.pipeline.m3 import run_m3_pipeline
+from video_translate.pipeline.m3_benchmark import run_m3_profile_benchmark
 from video_translate.pipeline.m3_prep import prepare_m3_tts_input
+from video_translate.pipeline.m3_tuning_report import build_m3_tuning_report_markdown
 from video_translate.preflight import preflight_errors, run_preflight
+from video_translate.ui_demo import run_ui_demo_server
 from video_translate.utils.subprocess_utils import CommandExecutionError
 
 app = typer.Typer(add_completion=False, no_args_is_help=True)
@@ -460,6 +463,89 @@ def benchmark_m2(
         raise typer.Exit(code=1) from exc
 
     typer.echo(f"M2 benchmark report: {report_path}")
+
+
+@app.command("benchmark-m3")
+def benchmark_m3(
+    run_root: Path = typer.Option(..., "--run-root", help="Run root directory created by run-m1."),
+    tts_input: Path | None = typer.Option(
+        None,
+        "--tts-input",
+        help="Optional explicit TTS input path. Defaults to run-root path.",
+    ),
+    config_path: list[Path] = typer.Option(
+        [],
+        "--config",
+        help="Config path(s). Use multiple --config entries to compare profiles.",
+    ),
+) -> None:
+    """Benchmark multiple M3 profiles on the same TTS input."""
+    resolved_input = tts_input or (run_root / "output" / "tts" / "tts_input.tr.json")
+    configs = config_path or [
+        Path("configs/profiles/gtx1650_i5_12500h.toml"),
+        Path("configs/profiles/gtx1650_espeak.toml"),
+    ]
+    try:
+        report_path = run_m3_profile_benchmark(
+            run_root=run_root,
+            tts_input_json=resolved_input,
+            config_paths=configs,
+        )
+    except FileNotFoundError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=17) from exc
+    except ValueError as exc:
+        typer.echo(f"Invalid benchmark input: {exc}", err=True)
+        raise typer.Exit(code=18) from exc
+    except Exception as exc:  # noqa: BLE001
+        typer.echo(f"Unexpected benchmark failure: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+
+    typer.echo(f"M3 benchmark report: {report_path}")
+
+
+@app.command("report-m3-tuning")
+def report_m3_tuning(
+    run_root: Path = typer.Option(..., "--run-root", help="Run root directory created by run-m1."),
+    benchmark_report_json: Path | None = typer.Option(
+        None,
+        "--benchmark-report-json",
+        help="Optional explicit benchmark report JSON path.",
+    ),
+    output_markdown: Path | None = typer.Option(
+        None,
+        "--output-markdown",
+        help="Optional explicit markdown report path.",
+    ),
+) -> None:
+    """Generate M3 tuning markdown report from benchmark JSON."""
+    try:
+        report_path = build_m3_tuning_report_markdown(
+            run_root=run_root,
+            benchmark_report_json=benchmark_report_json,
+            output_markdown_path=output_markdown,
+        )
+    except FileNotFoundError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=19) from exc
+    except ValueError as exc:
+        typer.echo(f"Invalid M3 tuning report input: {exc}", err=True)
+        raise typer.Exit(code=20) from exc
+    except Exception as exc:  # noqa: BLE001
+        typer.echo(f"Unexpected M3 tuning report failure: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+
+    typer.echo(f"M3 tuning report: {report_path}")
+
+
+@app.command("ui-demo")
+def ui_demo(
+    host: str = typer.Option("127.0.0.1", "--host", help="Bind address for local demo UI."),
+    port: int = typer.Option(8765, "--port", help="Bind port for local demo UI."),
+) -> None:
+    """Run lightweight local UI demo for M3 workflow testing."""
+    typer.echo(f"M3 UI demo starting at: http://{host}:{port}")
+    run_ui_demo_server(host, port)
 
 
 def main() -> None:
