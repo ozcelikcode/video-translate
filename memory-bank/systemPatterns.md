@@ -24,6 +24,16 @@ Pipeline tabanli, moduler, asamali genisletilebilir bir mimari.
 - `io.write_json` ile run manifest yazimi
 - ASR hata dayanimi: GPU OOM durumunda `asr.whisper` CPU fallback
 
+## Uctan Uca Tek Komut Akisi
+- `cli.run-dub` -> `pipeline.full_run.run_full_dub_pipeline`
+- Zincir:
+  - preflight (M1+M2+M3 bagimlilik denetimi)
+  - `run_m1_pipeline`
+  - `prepare_m2_translation_input`
+  - `run_m2_pipeline`
+  - varsayilan: `prepare_m3_tts_input` + `run_m3_pipeline`
+  - opsiyonel: `--m3-closure` ile `run_m3_closure_workflow`
+
 ## M2 Hazirlik Akisi
 - `cli.prepare-m2` -> `pipeline.m2_prep.prepare_m2_translation_input`
 - M1 transcript JSON'undan ceviri giris sozlesmesi uretimi

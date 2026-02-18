@@ -2,7 +2,7 @@
 
 Local and API-free EN-to-TR dubbing pipeline.
 
-Current stage: `M1` (YouTube ingest + audio normalization + timestamped ASR).
+Current stage: `M3` complete (YouTube ingest + ASR + EN->TR translate + local TTS dubbing + QA).
 
 ## Requirements
 
@@ -28,11 +28,13 @@ Recommended profile for GTX 1650 (4GB VRAM) + 16GB RAM:
 
 ```bash
 video-translate doctor --config configs/profiles/gtx1650_i5_12500h.toml
-video-translate run-m1 --url "https://www.youtube.com/watch?v=VIDEO_ID" --config configs/profiles/gtx1650_i5_12500h.toml
-video-translate prepare-m2 --run-root runs/m1_YYYYMMDD_HHMMSS
-video-translate run-m2 --run-root runs/m1_YYYYMMDD_HHMMSS --config configs/profiles/gtx1650_i5_12500h.toml
-video-translate prepare-m3 --run-root runs/m1_YYYYMMDD_HHMMSS
-video-translate run-m3 --run-root runs/m1_YYYYMMDD_HHMMSS --config configs/profiles/gtx1650_i5_12500h.toml
+video-translate run-dub --url "https://www.youtube.com/watch?v=VIDEO_ID" --config configs/profiles/gtx1650_i5_12500h.toml
+```
+
+One-command flow with strict M3 closure (optional auto-tune + strict QA gate):
+
+```bash
+video-translate run-dub --url "https://www.youtube.com/watch?v=VIDEO_ID" --config configs/profiles/gtx1650_espeak.toml --m3-closure
 ```
 
 Run M1:
@@ -193,4 +195,4 @@ video-translate run-m1 \
 ## Notes
 
 - No lip reading is used.
-- Sync-sensitive steps (translation, TTS, advanced alignment) are planned for later milestones.
+- No paid API is used.

@@ -6,6 +6,7 @@ import typer
 
 from video_translate.config import load_config
 from video_translate.pipeline.m1 import run_m1_pipeline
+from video_translate.pipeline.full_run import run_full_dub_pipeline
 from video_translate.pipeline.m2_benchmark import run_m2_profile_benchmark
 from video_translate.pipeline.m2 import run_m2_pipeline
 from video_translate.pipeline.m2_prep import prepare_m2_translation_input
@@ -233,6 +234,91 @@ def run_m1(
         typer.echo(f"Transcript SRT: {artifacts.transcript_srt}")
     typer.echo(f"QA Report: {artifacts.qa_report}")
     typer.echo(f"Run Manifest: {artifacts.run_manifest}")
+
+
+@app.command("run-dub")
+def run_dub(
+    url: str = typer.Option(..., "--url", help="YouTube video URL."),
+    config_path: Path | None = typer.Option(
+        None, "--config", help="Optional TOML config file to override defaults."
+    ),
+    workspace: Path | None = typer.Option(None, "--workspace", help="Run workspace directory."),
+    run_id: str | None = typer.Option(None, "--run-id", help="Optional explicit run id."),
+    emit_srt: bool = typer.Option(True, "--emit-srt/--no-emit-srt", help="Write transcript SRT output."),
+    target_lang: str | None = typer.Option(
+        None,
+        "--target-lang",
+        help="Optional target language override. Defaults to config translate.target_language.",
+    ),
+    use_m3_closure: bool = typer.Option(
+        False,
+        "--m3-closure/--no-m3-closure",
+        help="Use M3 closure workflow (optional auto-tune + strict QA gate final run).",
+    ),
+    base_config: Path = typer.Option(
+        Path("configs/profiles/gtx1650_espeak.toml"),
+        "--base-config",
+        help="Base espeak config path used by M3 closure auto tuning.",
+    ),
+    tuned_output_config: Path = typer.Option(
+        Path("configs/profiles/m3_espeak_recommended.toml"),
+        "--tuned-output-config",
+        help="Output path for tuned/locked profile in M3 closure flow.",
+    ),
+    auto_tune: bool = typer.Option(
+        True,
+        "--auto-tune/--no-auto-tune",
+        help="Enable auto tuning when M3 closure flow is selected.",
+    ),
+    max_candidates: int = typer.Option(
+        16,
+        "--max-candidates",
+        help="Maximum espeak candidate profile count for auto tuning.",
+    ),
+) -> None:
+    """Run complete URL -> M1 -> M2 -> M3 dubbing flow with one command."""
+    try:
+        config = load_config(config_path)
+        artifacts = run_full_dub_pipeline(
+            source_url=url,
+            config=config,
+            workspace_dir=workspace,
+            run_id=run_id,
+            emit_srt=emit_srt,
+            target_lang=target_lang,
+            use_m3_closure=use_m3_closure,
+            base_config_path=base_config,
+            tuned_output_config_path=tuned_output_config,
+            auto_tune=auto_tune,
+            max_candidates=max_candidates,
+        )
+    except FileExistsError as exc:
+        typer.echo(f"Run directory already exists: {exc}", err=True)
+        raise typer.Exit(code=2) from exc
+    except CommandExecutionError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=3) from exc
+    except RuntimeError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=28) from exc
+    except FileNotFoundError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=29) from exc
+    except ValueError as exc:
+        typer.echo(f"Invalid run-dub input: {exc}", err=True)
+        raise typer.Exit(code=30) from exc
+    except Exception as exc:  # noqa: BLE001
+        typer.echo(f"Unexpected run-dub failure: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+
+    typer.echo(f"Run root: {artifacts.run_root}")
+    typer.echo(f"M1 transcript JSON: {artifacts.m1_artifacts.transcript_json}")
+    typer.echo(f"M2 output: {artifacts.m2_artifacts.translation_output_json}")
+    typer.echo(f"M3 output: {artifacts.m3_artifacts.tts_output_json}")
+    typer.echo(f"M3 QA report: {artifacts.m3_artifacts.qa_report_json}")
+    typer.echo(f"M3 stitched preview: {artifacts.m3_artifacts.stitched_preview_wav}")
+    if artifacts.m3_closure_report_json:
+        typer.echo(f"M3 closure report: {artifacts.m3_closure_report_json}")
 
 
 @app.command("run-m2")

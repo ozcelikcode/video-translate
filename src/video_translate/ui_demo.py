@@ -16,7 +16,7 @@ from video_translate.pipeline.m3 import run_m3_pipeline
 from video_translate.pipeline.m3_prep import prepare_m3_tts_input
 from video_translate.preflight import preflight_errors, run_preflight
 
-UI_DEMO_VERSION = "2026-02-18-youtube-m3fit"
+UI_DEMO_VERSION = "2026-02-18-youtube-m3fit-run-dub-help"
 
 
 @dataclass(frozen=True)
@@ -344,6 +344,13 @@ YouTube Dub Akisi:
 1) URL gir
 2) M1 + M2 calisir
 3) Opsiyonel M3 ile TTS dublaj uretilir
+        </pre>
+      </div>
+      <div class="panel">
+        <pre>
+CLI Kullanim Komutlari:
+video-translate run-dub --url "https://www.youtube.com/watch?v=VIDEO_ID" --config configs/profiles/gtx1650_i5_12500h.toml
+video-translate run-dub --url "https://www.youtube.com/watch?v=VIDEO_ID" --config configs/profiles/gtx1650_espeak.toml --m3-closure
         </pre>
       </div>
       <div class="grid">

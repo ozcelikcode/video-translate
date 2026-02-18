@@ -1,13 +1,14 @@
 ﻿# Active Context
 
 ## Mevcut Odak
-M3 gercek yerel TTS backend'e gecis baslatildi (`espeak`). Simdi odak sure uyumu ve ritim adaptasyonunu iyilestirmek.
+Proje v1 kapanis durumu: tek komutla uctan uca akisi calisan, QA gate destekli M1->M2->M3 dublaj sistemi.
 
 ## Handoff Snapshot (2026-02-18)
-- Son test durumu: `python -m pytest -q` -> `61 passed` (2026-02-18).
+- Son test durumu: `python -m pytest -q` -> `63 passed` (2026-02-18).
 - CLI komutlari:
   - `doctor`
   - `run-m1`
+  - `run-dub`
   - `prepare-m2`
   - `run-m2`
   - `benchmark-m2`
@@ -186,6 +187,15 @@ M3 gercek yerel TTS backend'e gecis baslatildi (`espeak`). Simdi odak sure uyumu
 - UI YouTube giris gorunurlugu guclendirildi:
   - `src/video_translate/ui_demo.py` icinde "YouTube Link Ekle" odak kutusu eklendi.
   - YouTube kontrol gorunurlugu testle sabitlendi: `tests/test_ui_demo.py::test_html_page_contains_visible_youtube_controls`.
+- UI icine kullanim kolayligi icin text objesi eklendi:
+  - "CLI Kullanim Komutlari" panelinde `run-dub` ve `--m3-closure` komutlari gosteriliyor.
+  - test: `tests/test_ui_demo.py::test_html_page_contains_visible_youtube_controls`.
+- Uctan uca tek-komut akis eklendi:
+  - `pipeline.full_run.run_full_dub_pipeline`
+  - `cli.run-dub`
+  - URL -> M1 -> prepare-m2 -> run-m2 -> prepare-m3 -> run-m3
+  - opsiyonel `--m3-closure` ile `finish-m3` zinciri ayni komuttan aktif edilebilir
+  - test: `tests/test_full_run_pipeline.py`
 
 ## Aktif Kararlar
 - Gelistirme `M1 -> M5` kademeleriyle ilerleyecek.
@@ -194,20 +204,14 @@ M3 gercek yerel TTS backend'e gecis baslatildi (`espeak`). Simdi odak sure uyumu
 - Kod ve klasor adlandirmalari profesyonel ve tutarli olacak.
 
 ## Sonraki Adimlar
-- M3 segment sure uyumunu gelistirmek (konusma hizi/pause adaptasyonu).
-- M3 `espeak` ses/rate/pitch parametrelerini gercek veriyle tune etmek.
-- M3 `espeak` backend icin kabul esiklerini (`max_duration_delta_seconds`) profil bazli netlestirmek.
-- `benchmark-m3` raporuna gore `espeak` profil tuning tablosunu cikarmak.
-- `m3_tuning_report.md` uzerinden kalici profil secimini netlestirmek.
-- UI demo uzerinden M3 akisinin manuel UX testlerini yapmak.
+- Bu repo kapsaminda zorunlu teknik adim kalmadi; sonraki isler yeni faz/backlog olarak acilabilir.
 
 ## Sonraki Model Icin Net Baslangic Akisi
 1. `git status --short` ile degisiklikleri gor.
 2. `python -m pytest -q` ile tabani dogrula.
-3. `video-translate prepare-m3 --run-root <run_root>` calistir.
-4. `video-translate run-m3 --run-root <run_root> --config configs/profiles/gtx1650_espeak.toml` calistir.
-5. `output/qa/m3_qa_report.json` ve `run_m3_manifest.json` uzerinden sure delta dagilimini incele.
-6. `espeak` voice/rate/pitch ayarlarini kalite hedeflerine gore tune et.
+3. `video-translate run-dub --url "<youtube_url>" --config configs/profiles/gtx1650_i5_12500h.toml` calistir.
+4. Gerekirse strict kapanis icin `--m3-closure` ac.
+5. `run_root` altindaki `output/qa/m2_qa_report.json`, `output/qa/m3_qa_report.json`, `run_m3_manifest.json` dosyalarini kontrol et.
 
 ## Dikkat Notlari
 - Senkron hedefi yuksek, fakat lip reading kullanilmayacak.

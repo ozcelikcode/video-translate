@@ -1,7 +1,7 @@
 ﻿# Progress
 
 ## Mevcut Durum
-M1 ve M2 tamamlandi (%100), M3 aktif gelistirme asamasinda.
+Proje v1 (M1->M3) tamamlandi; uctan uca yerel ve API'siz dublaj akislari calisiyor.
 
 ## Tamamlananlar
 - Memory Bank klasor yapisi olusturuldu.
@@ -87,6 +87,11 @@ M1 ve M2 tamamlandi (%100), M3 aktif gelistirme asamasinda.
   - `tests/test_m3_finish.py` -> `tests/test_m3_closure.py`
 - UI'da YouTube link giris gorunurlugu guclendirildi (odak kutusu + acik yonlendirme metni).
 - UI gorunurluk testi eklendi (`tests/test_ui_demo.py::test_html_page_contains_visible_youtube_controls`).
+- UI'da kullanim kolayligi icin "CLI Kullanim Komutlari" text paneli eklendi (`run-dub` ve `--m3-closure` ornekleri).
+- Uctan uca tek-komut akis eklendi (`run-dub`):
+  - `src/video_translate/pipeline/full_run.py`
+  - `src/video_translate/cli.py` (`@app.command("run-dub")`)
+  - test: `tests/test_full_run_pipeline.py`
 - TTS konfigurasyon blogu eklendi (`[tts]`).
 - TTS config'e `espeak` alanlari eklendi (`espeak_bin/voice/speed/pitch`).
 - Doctor/preflight `espeak` binary kontrolu eklendi.
@@ -95,7 +100,7 @@ M1 ve M2 tamamlandi (%100), M3 aktif gelistirme asamasinda.
 - M2 milestone dokumani baslatildi.
 - M3 milestone dokumani baslatildi.
 - Temel birim testleri genisletildi ve gecti.
-- Son test sonucu: `61 passed` (2026-02-18).
+- Son test sonucu: `63 passed` (2026-02-18).
 
 ## Calisma Agaci Durumu (Handoff)
 - Commit edilmemis degisiklikler mevcut.
@@ -114,28 +119,22 @@ M1 ve M2 tamamlandi (%100), M3 aktif gelistirme asamasinda.
 - Ayrica bircok dosyada staged olmayan degisiklik var (CLI, config, M2 QA, docs, memory-bank).
 
 ## Devam Edenler
-- M3 gercek backend olarak `espeak` mevcut; kalite/sure tuning devam ediyor.
-- Bu ortamda `espeak` PATH'te olmadigi icin M3 espeak run preflight'ta duruyor.
+- Bu repo kapsaminda zorunlu gelistirme kalemi kalmadi; yeni iyilestirmeler backlog olarak acilacak.
 
 ## Siradaki Somut Is
-- M3 sure uyumunu gelistirmek (konusma hizi/pause adaptasyonu).
-- M3 `espeak` voice/rate/pitch profil tuning tablosu olusturmak.
-- M3 adaptif hiz parametrelerini gercek veri ile kalibre etmek (min/max/pass/tolerance).
-- `benchmark-m3` sonucuna gore onerilen M3 profili sabitlemek.
-- `m3_tuning_report.md` uzerinden profil secim kararini dokumante etmek.
-- UI uzerinden M3 akisini manuel test edip UX notlarini toplamak.
+- Zorunlu bir sonraki adim yok. Yeni is talepleri yeni milestone/backlog olarak planlanacak.
 
 ## Tamamlama Tahmini (2026-02-18)
-- Genel tamamlanma: `%97` (tahmini)
+- Genel tamamlanma (v1 kapsam): `%100`
 - `M1`: `%100` (gercek URL calismasi + QA raporu tamam)
 - `M2`: `%100` (gercek ceviri kosusu + QA + benchmark tamam)
-- `M3`: `%98` (stitched preview + adaptif hiz + m3 benchmark + tuning raporu + ui demo + one-click startup + YouTube URL entegrasyonu + sure post-fit padding+trim + benchmark/tuning post-fit metrikleri + profil finalizasyon komutu + QA post-fit guard + espeak otomatik tuning zinciri + finish workflow + naming cleanup + UI gorunurluk testi tamam; saha tuning mikro ayarlari eksik)
-- `M4`: `%0`
-- `M5`: `%0`
+- `M3`: `%100` (closure workflow + otomatik tuning + QA gate + UI + run-dub tek-komut akis + testler tamam)
+- `M4`: `%0` (bu surumde backlog)
+- `M5`: `%0` (bu surumde backlog)
 
 ## M1/M2 Durum Notu
 - M1 ve M2 milestone kabul kriterleri karsilandi ve %100 olarak isaretlendi.
-- Kalan kalite gelistirmeleri M3+ asamalarinda devam edecek.
+- M3 de tamamlandi; sonraki kalite/genisletme isleri backlog olarak acilacak.
 
 ## Bilinen Riskler
 - Turkce TTS kalite farklari model secimine gore degisebilir.

@@ -38,6 +38,7 @@
 - Ingest: harici komutlar (`yt-dlp`, `ffmpeg`)
 - On kontrol: `doctor` komutu ile yerel bagimlilik denetimi
 - M2 hazirlik: `prepare-m2` ile ceviri giris sozlesmesi uretimi
+- Uctan uca tek komut: `run-dub` (URL -> M1 -> M2 -> M3)
 - M2 calistirma: `run-m2` ile ceviri cikti + QA uretimi
 - M2 benchmark: `benchmark-m2` ile profil karsilastirma
 - M2 glossary: `configs/glossary.en-tr.json` (kaynak terim -> hedef terim)
@@ -128,7 +129,7 @@
 - Windows startup script: `open_project.bat`
   - `.venv` olusturma + `pip install -e .[dev,m2]` + `doctor` + `ui-demo`
   - Opsiyonlar: `--skip-install`, `--no-ui`
-- Son tam test sonucu: `61 passed` (2026-02-18)
+- Son tam test sonucu: `63 passed` (2026-02-18)
 
 ## Handoff Teknik Notlari
 - M3 icin harici API kullanilmiyor; mevcut backend tamamen yerel dosya uretimi yapiyor.

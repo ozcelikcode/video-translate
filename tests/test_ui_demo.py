@@ -192,3 +192,5 @@ def test_html_page_contains_visible_youtube_controls() -> None:
     assert "YouTube URL" in html
     assert "YouTube'dan Dublaj Baslat" in html
     assert "YouTube Link Ekle" in html
+    assert "CLI Kullanim Komutlari" in html
+    assert "video-translate run-dub --url" in html
