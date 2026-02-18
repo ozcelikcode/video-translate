@@ -47,5 +47,7 @@ espeak_adaptive_rate_max_wpm = 260
 espeak_adaptive_rate_max_passes = 4
 espeak_adaptive_rate_tolerance_seconds = 0.06
 max_duration_delta_seconds = 0.20
+qa_max_postfit_segment_ratio = 0.70
+qa_max_postfit_seconds_ratio = 0.45
 qa_fail_on_flags = false
 qa_allowed_flags = []

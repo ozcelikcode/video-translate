@@ -1,10 +1,10 @@
-# Active Context
+﻿# Active Context
 
 ## Mevcut Odak
 M3 gercek yerel TTS backend'e gecis baslatildi (`espeak`). Simdi odak sure uyumu ve ritim adaptasyonunu iyilestirmek.
 
 ## Handoff Snapshot (2026-02-18)
-- Son test durumu: `python -m pytest -q` -> `50 passed` (2026-02-18).
+- Son test durumu: `python -m pytest -q` -> `61 passed` (2026-02-18).
 - CLI komutlari:
   - `doctor`
   - `run-m1`
@@ -15,6 +15,9 @@ M3 gercek yerel TTS backend'e gecis baslatildi (`espeak`). Simdi odak sure uyumu
   - `run-m3`
   - `benchmark-m3`
   - `report-m3-tuning`
+  - `finalize-m3-profile`
+  - `tune-m3-espeak`
+  - `finish-m3`
   - `ui-demo`
 - M3 su an `mock` ve `espeak` backendleri ile calisiyor.
 - Calisma agaci temiz degil (commit edilmemis degisiklikler var).
@@ -132,6 +135,57 @@ M3 gercek yerel TTS backend'e gecis baslatildi (`espeak`). Simdi odak sure uyumu
   - Akis: `.venv` -> `pip install -e .[dev,m2]` -> `doctor` -> `ui-demo`
   - `--skip-install` ve `--no-ui` bayraklari dogrulandi
   - CMD parser hatasi (`if (...)` icinde kapanis parantezi) giderildi
+- UI demo YouTube entegrasyonu eklendi:
+  - `src/video_translate/ui_demo.py`
+  - Yeni endpoint: `POST /run-youtube-dub`
+  - Yeni is akisi: URL -> `run_m1` -> `prepare_m2` -> `run_m2` -> (opsiyonel) `prepare_m3` -> `run_m3`
+  - Mevcut `POST /run-m3` akisiyla birlikte ayni panelde calisiyor
+  - Test: `tests/test_ui_demo.py::test_execute_youtube_dub_demo_runs_full_chain`
+- UI cache gorunurluk sorunu icin no-cache response basliklari eklendi.
+- UI icine gorunur build etiketi eklendi:
+  - `UI Build: 2026-02-18-youtube-m3fit`
+- M3 sure uyumu iyilestirildi:
+  - kisa kalan segment WAV'lerine hedef sureye kadar sessizlik padding uygulanir
+  - `run_m3_manifest.json` icinde `duration_postfit` metrikleri yazilir
+  - test: `tests/test_m3_pipeline.py::test_run_m3_pipeline_pads_short_segments_with_silence`
+- M3 sure uyumu ikinci adim:
+  - uzun kalan segment WAV'lerinde hedef sureye trim uygulanir
+  - `duration_postfit.trim_applied_segments` ve `duration_postfit.total_trimmed_seconds` eklendi
+  - test: `tests/test_m3_pipeline.py::test_run_m3_pipeline_trims_long_segments`
+- M3 benchmark/tuning raporlari guclendirildi:
+  - benchmark JSON'ina post-fit segment/sure metrikleri eklendi
+  - tuning markdown tablosuna post-fit pad/trim kolonlari eklendi
+  - testler: `tests/test_m3_benchmark.py`, `tests/test_m3_tuning_report.py`
+- M3 finalizasyon komutu eklendi:
+  - `pipeline.m3_finalize.finalize_m3_profile_selection`
+  - `cli.finalize-m3-profile`
+  - benchmark onerilen profili `configs/profiles/m3_recommended.toml` dosyasina kilitler
+  - secim ozetini `benchmarks/m3_profile_selection.json` olarak yazar
+  - test: `tests/test_m3_finalize.py`
+- M3 QA post-fit guard eklendi:
+  - yeni config alanlari: `tts.qa_max_postfit_segment_ratio`, `tts.qa_max_postfit_seconds_ratio`
+  - QA raporu post-fit oranlarini hesaplar ve asimlarda bayrak uretir
+  - bayraklar: `postfit_segment_ratio_above_max`, `postfit_seconds_ratio_above_max`
+  - `qa_fail_on_flags=true` ise gate bu bayraklarla run'i durdurabilir
+  - testler: `tests/test_m3_qa_report.py`, `tests/test_m3_pipeline.py`, `tests/test_config.py`
+- M3 espeak tuning otomasyonu eklendi:
+  - `pipeline.m3_espeak_tune.run_m3_espeak_tuning_automation`
+  - `cli.tune-m3-espeak`
+  - aday profil uretimi + benchmark + tuning report + finalize zinciri
+  - test: `tests/test_m3_espeak_tune.py`
+- M3 kapanis workflow'u eklendi:
+  - `pipeline.m3_closure.run_m3_closure_workflow`
+  - `cli.finish-m3`
+  - akis: prepare + (opsiyonel auto-tune) + strict QA gate final run
+  - rapor: `benchmarks/m3_closure_report.json`
+  - test: `tests/test_m3_closure.py`
+- M3 dosya adlandirma standardi duzeltildi:
+  - `src/video_translate/pipeline/m3_finish.py` -> `src/video_translate/pipeline/m3_closure.py`
+  - `tests/test_m3_finish.py` -> `tests/test_m3_closure.py`
+  - CLI import/cagri referanslari `m3_closure` uzerine alindi.
+- UI YouTube giris gorunurlugu guclendirildi:
+  - `src/video_translate/ui_demo.py` icinde "YouTube Link Ekle" odak kutusu eklendi.
+  - YouTube kontrol gorunurlugu testle sabitlendi: `tests/test_ui_demo.py::test_html_page_contains_visible_youtube_controls`.
 
 ## Aktif Kararlar
 - Gelistirme `M1 -> M5` kademeleriyle ilerleyecek.
@@ -158,3 +212,4 @@ M3 gercek yerel TTS backend'e gecis baslatildi (`espeak`). Simdi odak sure uyumu
 ## Dikkat Notlari
 - Senkron hedefi yuksek, fakat lip reading kullanilmayacak.
 - Kaliteyi guvencelemek icin metrik odakli QA en bastan planlanacak.
+

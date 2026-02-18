@@ -72,6 +72,64 @@ def _write_wav_mono_pcm16(path: Path, sample_rate: int, samples: list[int]) -> N
         wav_file.writeframes(frame_blob)
 
 
+def _pad_wav_silence_to_duration(wav_path: Path, target_duration: float) -> float:
+    with wave.open(str(wav_path), "rb") as wav_file:
+        channels = wav_file.getnchannels()
+        sample_width = wav_file.getsampwidth()
+        sample_rate = wav_file.getframerate()
+        frame_count = wav_file.getnframes()
+        raw_frames = wav_file.readframes(frame_count)
+        comp_type = wav_file.getcomptype()
+        comp_name = wav_file.getcompname()
+    if sample_rate <= 0:
+        return 0.0
+    current_duration = frame_count / sample_rate
+    if target_duration <= current_duration:
+        return current_duration
+    target_frames = int(round(target_duration * sample_rate))
+    missing_frames = max(0, target_frames - frame_count)
+    if missing_frames <= 0:
+        return current_duration
+    silence_frame = b"\x00" * sample_width * channels
+    padded_frames = raw_frames + (silence_frame * missing_frames)
+    with wave.open(str(wav_path), "wb") as wav_file:
+        wav_file.setnchannels(channels)
+        wav_file.setsampwidth(sample_width)
+        wav_file.setframerate(sample_rate)
+        wav_file.setcomptype(comp_type, comp_name)
+        wav_file.writeframes(padded_frames)
+    return target_frames / sample_rate
+
+
+def _trim_wav_to_duration(wav_path: Path, target_duration: float) -> float:
+    with wave.open(str(wav_path), "rb") as wav_file:
+        channels = wav_file.getnchannels()
+        sample_width = wav_file.getsampwidth()
+        sample_rate = wav_file.getframerate()
+        frame_count = wav_file.getnframes()
+        raw_frames = wav_file.readframes(frame_count)
+        comp_type = wav_file.getcomptype()
+        comp_name = wav_file.getcompname()
+    if sample_rate <= 0:
+        return 0.0
+    current_duration = frame_count / sample_rate
+    if target_duration >= current_duration:
+        return current_duration
+    target_frames = int(round(target_duration * sample_rate))
+    target_frames = max(1, target_frames)
+    if target_frames >= frame_count:
+        return current_duration
+    bytes_per_frame = sample_width * channels
+    trimmed_frames = raw_frames[: target_frames * bytes_per_frame]
+    with wave.open(str(wav_path), "wb") as wav_file:
+        wav_file.setnchannels(channels)
+        wav_file.setsampwidth(sample_width)
+        wav_file.setframerate(sample_rate)
+        wav_file.setcomptype(comp_type, comp_name)
+        wav_file.writeframes(trimmed_frames)
+    return target_frames / sample_rate
+
+
 def _build_stitched_preview_wav(*, output_doc: TTSOutputDocument, preview_wav_path: Path) -> Path:
     mixed: list[int] = []
     detected_sample_rate: int | None = None
@@ -125,6 +183,10 @@ def run_m3_pipeline(
     synth_start = perf_counter()
     segment_audio_paths: list[Path] = []
     synthesized_durations: list[float] = []
+    duration_padding_applied = 0
+    total_padded_seconds = 0.0
+    duration_trim_applied = 0
+    total_trimmed_seconds = 0.0
     for segment in input_doc.segments:
         output_wav = segment_audio_dir / f"seg_{segment.id:06d}.wav"
         synthesized_duration = backend.synthesize_to_wav(
@@ -133,6 +195,18 @@ def run_m3_pipeline(
             target_duration=segment.duration,
             sample_rate=config.tts.sample_rate,
         )
+        if synthesized_duration < segment.duration:
+            padded_duration = _pad_wav_silence_to_duration(output_wav, segment.duration)
+            if padded_duration > synthesized_duration:
+                duration_padding_applied += 1
+                total_padded_seconds += padded_duration - synthesized_duration
+                synthesized_duration = padded_duration
+        elif synthesized_duration > segment.duration:
+            trimmed_duration = _trim_wav_to_duration(output_wav, segment.duration)
+            if trimmed_duration < synthesized_duration:
+                duration_trim_applied += 1
+                total_trimmed_seconds += synthesized_duration - trimmed_duration
+                synthesized_duration = trimmed_duration
         segment_audio_paths.append(output_wav)
         synthesized_durations.append(synthesized_duration)
     synth_seconds = perf_counter() - synth_start
@@ -148,7 +222,14 @@ def run_m3_pipeline(
     build_output_seconds = perf_counter() - build_output_start
 
     qa_start = perf_counter()
-    qa_report = build_m3_qa_report(output_doc, config.tts)
+    qa_report = build_m3_qa_report(
+        output_doc,
+        config.tts,
+        postfit_padding_segments=duration_padding_applied,
+        postfit_trim_segments=duration_trim_applied,
+        postfit_total_padded_seconds=total_padded_seconds,
+        postfit_total_trimmed_seconds=total_trimmed_seconds,
+    )
     qa_seconds = perf_counter() - qa_start
 
     output_json_path.parent.mkdir(parents=True, exist_ok=True)
@@ -185,6 +266,12 @@ def run_m3_pipeline(
                 "build_qa_report": qa_seconds,
                 "write_outputs": write_seconds,
                 "total_pipeline": total_seconds,
+            },
+            "duration_postfit": {
+                "silence_padding_applied_segments": duration_padding_applied,
+                "total_padded_seconds": total_padded_seconds,
+                "trim_applied_segments": duration_trim_applied,
+                "total_trimmed_seconds": total_trimmed_seconds,
             },
             "qa_gate": {
                 "enabled": config.tts.qa_fail_on_flags,

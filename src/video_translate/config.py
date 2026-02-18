@@ -81,6 +81,8 @@ class TTSConfig:
     espeak_adaptive_rate_max_passes: int
     espeak_adaptive_rate_tolerance_seconds: float
     max_duration_delta_seconds: float
+    qa_max_postfit_segment_ratio: float
+    qa_max_postfit_seconds_ratio: float
     qa_fail_on_flags: bool
     qa_allowed_flags: tuple[str, ...]
 
@@ -330,6 +332,18 @@ def load_config(config_path: Path | None = None) -> AppConfig:
         tts_table.get("max_duration_delta_seconds", 0.08),
         "tts.max_duration_delta_seconds",
     )
+    tts_qa_max_postfit_segment_ratio = _required_non_negative_float(
+        tts_table.get("qa_max_postfit_segment_ratio", 0.60),
+        "tts.qa_max_postfit_segment_ratio",
+    )
+    if tts_qa_max_postfit_segment_ratio > 1.0:
+        raise ValueError("Config field 'tts.qa_max_postfit_segment_ratio' must be <= 1.0.")
+    tts_qa_max_postfit_seconds_ratio = _required_non_negative_float(
+        tts_table.get("qa_max_postfit_seconds_ratio", 0.35),
+        "tts.qa_max_postfit_seconds_ratio",
+    )
+    if tts_qa_max_postfit_seconds_ratio > 1.0:
+        raise ValueError("Config field 'tts.qa_max_postfit_seconds_ratio' must be <= 1.0.")
     tts_qa_fail_on_flags = bool(tts_table.get("qa_fail_on_flags", False))
     tts_qa_allowed_flags = _optional_str_tuple(
         tts_table.get("qa_allowed_flags", []),
@@ -399,6 +413,8 @@ def load_config(config_path: Path | None = None) -> AppConfig:
             espeak_adaptive_rate_max_passes=tts_espeak_adaptive_rate_max_passes,
             espeak_adaptive_rate_tolerance_seconds=tts_espeak_adaptive_rate_tolerance_seconds,
             max_duration_delta_seconds=tts_max_duration_delta_seconds,
+            qa_max_postfit_segment_ratio=tts_qa_max_postfit_segment_ratio,
+            qa_max_postfit_seconds_ratio=tts_qa_max_postfit_seconds_ratio,
             qa_fail_on_flags=tts_qa_fail_on_flags,
             qa_allowed_flags=tts_qa_allowed_flags,
         ),

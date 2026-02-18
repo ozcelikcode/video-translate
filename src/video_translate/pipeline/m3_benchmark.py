@@ -25,6 +25,10 @@ class M3BenchmarkResult:
     max_abs_duration_delta_seconds: float | None
     quality_flag_count: int | None
     quality_flags: list[str]
+    postfit_padding_segments: int | None
+    postfit_trim_segments: int | None
+    postfit_total_padded_seconds: float | None
+    postfit_total_trimmed_seconds: float | None
     error: str | None
 
 
@@ -95,6 +99,10 @@ def run_m3_profile_benchmark(
                     max_abs_duration_delta_seconds=None,
                     quality_flag_count=None,
                     quality_flags=[],
+                    postfit_padding_segments=None,
+                    postfit_trim_segments=None,
+                    postfit_total_padded_seconds=None,
+                    postfit_total_trimmed_seconds=None,
                     error="; ".join(issues),
                 )
             )
@@ -116,8 +124,13 @@ def run_m3_profile_benchmark(
             qa_payload = _read_json(artifacts.qa_report_json)
             timings_payload = manifest_payload.get("timings_seconds", {})
             duration_payload = qa_payload.get("duration_metrics", {})
+            postfit_payload = manifest_payload.get("duration_postfit", {})
             total_pipeline_seconds = float(timings_payload.get("total_pipeline", 0.0))
             max_abs_delta = float(duration_payload.get("max_abs_delta_seconds", 0.0))
+            postfit_padding_segments = int(postfit_payload.get("silence_padding_applied_segments", 0))
+            postfit_trim_segments = int(postfit_payload.get("trim_applied_segments", 0))
+            postfit_total_padded_seconds = float(postfit_payload.get("total_padded_seconds", 0.0))
+            postfit_total_trimmed_seconds = float(postfit_payload.get("total_trimmed_seconds", 0.0))
             quality_flags_raw = qa_payload.get("quality_flags", [])
             if not isinstance(quality_flags_raw, list):
                 quality_flags_raw = []
@@ -139,6 +152,10 @@ def run_m3_profile_benchmark(
                     max_abs_duration_delta_seconds=max_abs_delta,
                     quality_flag_count=len(quality_flags),
                     quality_flags=quality_flags,
+                    postfit_padding_segments=postfit_padding_segments,
+                    postfit_trim_segments=postfit_trim_segments,
+                    postfit_total_padded_seconds=postfit_total_padded_seconds,
+                    postfit_total_trimmed_seconds=postfit_total_trimmed_seconds,
                     error=None,
                 )
             )
@@ -156,6 +173,10 @@ def run_m3_profile_benchmark(
                     max_abs_duration_delta_seconds=None,
                     quality_flag_count=None,
                     quality_flags=[],
+                    postfit_padding_segments=None,
+                    postfit_trim_segments=None,
+                    postfit_total_padded_seconds=None,
+                    postfit_total_trimmed_seconds=None,
                     error=str(exc),
                 )
             )
@@ -168,6 +189,14 @@ def run_m3_profile_benchmark(
             item.max_abs_duration_delta_seconds
             if item.max_abs_duration_delta_seconds is not None
             else float("inf"),
+            (
+                (item.postfit_padding_segments or 0)
+                + (item.postfit_trim_segments or 0)
+            ),
+            (
+                (item.postfit_total_padded_seconds or 0.0)
+                + (item.postfit_total_trimmed_seconds or 0.0)
+            ),
             item.total_pipeline_seconds if item.total_pipeline_seconds is not None else float("inf"),
         ),
     )
@@ -192,6 +221,10 @@ def run_m3_profile_benchmark(
                 "max_abs_duration_delta_seconds": result.max_abs_duration_delta_seconds,
                 "quality_flag_count": result.quality_flag_count,
                 "quality_flags": result.quality_flags,
+                "postfit_padding_segments": result.postfit_padding_segments,
+                "postfit_trim_segments": result.postfit_trim_segments,
+                "postfit_total_padded_seconds": result.postfit_total_padded_seconds,
+                "postfit_total_trimmed_seconds": result.postfit_total_trimmed_seconds,
                 "error": result.error,
             }
             for result in results

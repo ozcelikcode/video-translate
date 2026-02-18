@@ -69,6 +69,24 @@ Run M3 local TTS:
 video-translate run-m3 --run-root runs/m1_YYYYMMDD_HHMMSS
 ```
 
+Lock recommended M3 profile from benchmark:
+
+```bash
+video-translate finalize-m3-profile --run-root runs/m1_YYYYMMDD_HHMMSS
+```
+
+Run automated espeak tuning (candidate generation + benchmark + report + lock):
+
+```bash
+video-translate tune-m3-espeak --run-root runs/m1_YYYYMMDD_HHMMSS
+```
+
+Run M3 finish workflow (prepare + optional auto tune + strict QA gate final run):
+
+```bash
+video-translate finish-m3 --run-root runs/m1_YYYYMMDD_HHMMSS
+```
+
 Run lightweight local M3 UI demo:
 
 ```bash
@@ -76,6 +94,9 @@ video-translate ui-demo --host 127.0.0.1 --port 8765
 ```
 
 Then open `http://127.0.0.1:8765` in browser.
+UI now supports YouTube URL based end-to-end flow:
+- `M1 -> prepare-m2 -> run-m2 -> (optional) prepare-m3 -> run-m3`
+- and existing M3-only run-root testing.
 
 One-click Windows startup (`.bat`):
 

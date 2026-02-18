@@ -66,6 +66,27 @@ M1 ve M2 tamamlandi (%100), M3 aktif gelistirme asamasinda.
 - M3 UI demo testi eklendi (`tests/test_ui_demo.py`).
 - Windows one-click calistirma scripti eklendi ve stabilize edildi (`open_project.bat`).
 - `open_project.bat` icin `--skip-install` + `--no-ui` akis dogrulamasi basarili.
+- UI demo icin YouTube URL entegrasyonu eklendi (`POST /run-youtube-dub`).
+- UI demo'da URL tabanli M1->M2->(opsiyonel)M3 zinciri aktif.
+- UI demo cache sorunu icin no-cache HTTP basliklari eklendi.
+- UI icinde build etiketi eklendi (`2026-02-18-youtube-m3fit`).
+- M3 sure post-fit eklendi: kisa segmentlere sessizlik padding.
+- M3 manifest'e `duration_postfit` metrikleri eklendi.
+- M3 sure post-fit genisletildi: uzun segmentlere WAV trim eklendi.
+- M3 benchmark/tuning raporlarina post-fit metrikleri eklendi (pad/trim segment+sure).
+- M3 profil finalizasyon komutu eklendi (`finalize-m3-profile`).
+- M3 finalizasyon secim raporu eklendi (`benchmarks/m3_profile_selection.json`).
+- M3 QA post-fit guard eklendi (segment/sure oran bayraklari).
+- TTS config'e post-fit QA esikleri eklendi (`qa_max_postfit_segment_ratio`, `qa_max_postfit_seconds_ratio`).
+- M3 espeak otomatik tuning komutu eklendi (`tune-m3-espeak`).
+- M3 espeak tuning zinciri eklendi (aday uretim + benchmark + tuning report + finalize).
+- M3 kapanis workflow komutu eklendi (`finish-m3`).
+- M3 kapanis raporu eklendi (`benchmarks/m3_closure_report.json`).
+- M3 dosya adlandirma standardi duzeltildi:
+  - `src/video_translate/pipeline/m3_finish.py` -> `src/video_translate/pipeline/m3_closure.py`
+  - `tests/test_m3_finish.py` -> `tests/test_m3_closure.py`
+- UI'da YouTube link giris gorunurlugu guclendirildi (odak kutusu + acik yonlendirme metni).
+- UI gorunurluk testi eklendi (`tests/test_ui_demo.py::test_html_page_contains_visible_youtube_controls`).
 - TTS konfigurasyon blogu eklendi (`[tts]`).
 - TTS config'e `espeak` alanlari eklendi (`espeak_bin/voice/speed/pitch`).
 - Doctor/preflight `espeak` binary kontrolu eklendi.
@@ -74,7 +95,7 @@ M1 ve M2 tamamlandi (%100), M3 aktif gelistirme asamasinda.
 - M2 milestone dokumani baslatildi.
 - M3 milestone dokumani baslatildi.
 - Temel birim testleri genisletildi ve gecti.
-- Son test sonucu: `50 passed` (2026-02-18).
+- Son test sonucu: `61 passed` (2026-02-18).
 
 ## Calisma Agaci Durumu (Handoff)
 - Commit edilmemis degisiklikler mevcut.
@@ -105,10 +126,10 @@ M1 ve M2 tamamlandi (%100), M3 aktif gelistirme asamasinda.
 - UI uzerinden M3 akisini manuel test edip UX notlarini toplamak.
 
 ## Tamamlama Tahmini (2026-02-18)
-- Genel tamamlanma: `%82` (tahmini)
+- Genel tamamlanma: `%97` (tahmini)
 - `M1`: `%100` (gercek URL calismasi + QA raporu tamam)
 - `M2`: `%100` (gercek ceviri kosusu + QA + benchmark tamam)
-- `M3`: `%73` (stitched preview + adaptif hiz + m3 benchmark + tuning raporu + ui demo + one-click startup tamam; saha tuning ve ritim mikro-iyilestirme eksik)
+- `M3`: `%98` (stitched preview + adaptif hiz + m3 benchmark + tuning raporu + ui demo + one-click startup + YouTube URL entegrasyonu + sure post-fit padding+trim + benchmark/tuning post-fit metrikleri + profil finalizasyon komutu + QA post-fit guard + espeak otomatik tuning zinciri + finish workflow + naming cleanup + UI gorunurluk testi tamam; saha tuning mikro ayarlari eksik)
 - `M4`: `%0`
 - `M5`: `%0`
 
@@ -122,4 +143,5 @@ M1 ve M2 tamamlandi (%100), M3 aktif gelistirme asamasinda.
 - Tam profesyonel senkron icin QA metrikleri erken asamada zorunlu.
 - Yerel ortamda `yt-dlp` veya `ffmpeg` eksikse pipeline calismaz.
 - ASR model secimi (hiz/dogruluk) cihaza gore farkli davranabilir.
+
 

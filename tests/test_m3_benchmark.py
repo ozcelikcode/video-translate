@@ -61,4 +61,5 @@ def test_run_m3_profile_benchmark_writes_report(monkeypatch: MonkeyPatch, tmp_pa
     assert payload["summary"]["profile_count"] == 2
     assert payload["summary"]["success_count"] == 2
     assert payload["summary"]["recommended_profile"] is not None
-
+    assert "postfit_padding_segments" in payload["profiles"][0]
+    assert "postfit_trim_segments" in payload["profiles"][0]

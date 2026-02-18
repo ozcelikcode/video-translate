@@ -1,4 +1,4 @@
-# Tech Context
+﻿# Tech Context
 
 ## Dil ve Araclar
 - `Python 3.12+`
@@ -64,6 +64,9 @@
 - M3 calistirma: `run-m3` ile TTS cikti + QA uretimi
 - M3 benchmark: `benchmark-m3` ile profil karsilastirma
 - M3 tuning markdown raporu: `report-m3-tuning`
+- M3 profil finalizasyonu: `finalize-m3-profile`
+- M3 espeak otomatik tuning: `tune-m3-espeak`
+- M3 kapanis otomasyonu: `finish-m3`
 - M3 lokal UI demo: `ui-demo`
 - M3 backend: `mock` ve `espeak` (yerel, API'siz)
 - M3 backend modulu: `src/video_translate/tts/backends.py`
@@ -87,16 +90,45 @@
   - `tts.espeak_speed_wpm`
   - `tts.espeak_pitch`
   - `tts.max_duration_delta_seconds`
+  - `tts.qa_max_postfit_segment_ratio`
+  - `tts.qa_max_postfit_seconds_ratio`
   - `tts.qa_fail_on_flags`
   - `tts.qa_allowed_flags`
 - M3 run manifest: `run_m3_manifest.json`
 - M3 benchmark raporu: `benchmarks/m3_profile_benchmark.json`
 - M3 tuning raporu: `benchmarks/m3_tuning_report.md`
+- M3 finalizasyon raporu: `benchmarks/m3_profile_selection.json`
+- M3 espeak tuning artefaktlari:
+  - `benchmarks/espeak_tune/m3_espeak_tuning_benchmark.json`
+  - `benchmarks/espeak_tune/m3_espeak_tuning_report.md`
+  - `benchmarks/espeak_tune/m3_espeak_tuning_meta.json`
+- M3 kapanis raporu:
+  - `benchmarks/m3_closure_report.json`
+- M3 kapanis modul adlandirmasi:
+  - `src/video_translate/pipeline/m3_closure.py`
+  - `tests/test_m3_closure.py`
+- M3 benchmark/tuning post-fit metrikleri:
+  - `postfit_padding_segments`
+  - `postfit_trim_segments`
+  - `postfit_total_padded_seconds`
+  - `postfit_total_trimmed_seconds`
 - UI demo dokumani: `docs/ui-demo.md`
+- UI demo endpointleri:
+  - `POST /run-youtube-dub`
+  - `POST /run-m3`
+- UI demo cache politikasi:
+  - HTTP yanitlarinda `Cache-Control: no-store`
+  - build etiketi: `2026-02-18-youtube-m3fit`
+- M3 sure post-fit:
+  - kisa kalan segment WAV'lerine sessizlik padding
+  - run manifest: `duration_postfit` metrikleri
+  - uzun kalan segment WAV'lerinde trim
+- M3 QA post-fit guard:
+  - post-fit segment/sure oranlari esik ustundeyse kalite bayragi uretir
 - Windows startup script: `open_project.bat`
   - `.venv` olusturma + `pip install -e .[dev,m2]` + `doctor` + `ui-demo`
   - Opsiyonlar: `--skip-install`, `--no-ui`
-- Son tam test sonucu: `50 passed` (2026-02-18)
+- Son tam test sonucu: `61 passed` (2026-02-18)
 
 ## Handoff Teknik Notlari
 - M3 icin harici API kullanilmiyor; mevcut backend tamamen yerel dosya uretimi yapiyor.
@@ -108,3 +140,4 @@
   - `tests/test_m3_prep.py`
   - `tests/test_m3_pipeline.py`
   - `tests/test_m3_qa_report.py`
+

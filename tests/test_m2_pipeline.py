@@ -76,6 +76,8 @@ def _build_app_config() -> AppConfig:
             espeak_adaptive_rate_max_passes=3,
             espeak_adaptive_rate_tolerance_seconds=0.06,
             max_duration_delta_seconds=0.08,
+            qa_max_postfit_segment_ratio=0.60,
+            qa_max_postfit_seconds_ratio=0.35,
             qa_fail_on_flags=False,
             qa_allowed_flags=(),
         ),

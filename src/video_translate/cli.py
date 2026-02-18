@@ -11,6 +11,9 @@ from video_translate.pipeline.m2 import run_m2_pipeline
 from video_translate.pipeline.m2_prep import prepare_m2_translation_input
 from video_translate.pipeline.m3 import run_m3_pipeline
 from video_translate.pipeline.m3_benchmark import run_m3_profile_benchmark
+from video_translate.pipeline.m3_finalize import finalize_m3_profile_selection
+from video_translate.pipeline.m3_closure import run_m3_closure_workflow
+from video_translate.pipeline.m3_espeak_tune import run_m3_espeak_tuning_automation
 from video_translate.pipeline.m3_prep import prepare_m3_tts_input
 from video_translate.pipeline.m3_tuning_report import build_m3_tuning_report_markdown
 from video_translate.preflight import preflight_errors, run_preflight
@@ -536,6 +539,163 @@ def report_m3_tuning(
         raise typer.Exit(code=1) from exc
 
     typer.echo(f"M3 tuning report: {report_path}")
+
+
+@app.command("finalize-m3-profile")
+def finalize_m3_profile(
+    run_root: Path = typer.Option(..., "--run-root", help="Run root directory created by run-m1."),
+    benchmark_report_json: Path | None = typer.Option(
+        None,
+        "--benchmark-report-json",
+        help="Optional explicit benchmark report JSON path.",
+    ),
+    output_config: Path | None = typer.Option(
+        None,
+        "--output-config",
+        help="Optional output profile path. Defaults to configs/profiles/m3_recommended.toml.",
+    ),
+) -> None:
+    """Finalize M3 profile selection and lock the recommended config."""
+    try:
+        artifacts = finalize_m3_profile_selection(
+            run_root=run_root,
+            benchmark_report_json=benchmark_report_json,
+            output_config_path=output_config,
+        )
+    except FileNotFoundError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=21) from exc
+    except ValueError as exc:
+        typer.echo(f"Invalid M3 finalization input: {exc}", err=True)
+        raise typer.Exit(code=22) from exc
+    except Exception as exc:  # noqa: BLE001
+        typer.echo(f"Unexpected M3 finalization failure: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+
+    typer.echo(f"M3 recommended profile: {artifacts.recommended_profile}")
+    typer.echo(f"M3 source config: {artifacts.source_config_path}")
+    typer.echo(f"M3 locked config: {artifacts.output_config_path}")
+    typer.echo(f"M3 selection report: {artifacts.selection_report_json}")
+
+
+@app.command("tune-m3-espeak")
+def tune_m3_espeak(
+    run_root: Path = typer.Option(..., "--run-root", help="Run root directory created by run-m1."),
+    tts_input: Path | None = typer.Option(
+        None,
+        "--tts-input",
+        help="Optional explicit TTS input JSON path. Defaults to run-root path.",
+    ),
+    base_config: Path = typer.Option(
+        Path("configs/profiles/gtx1650_espeak.toml"),
+        "--base-config",
+        help="Base espeak config path used to generate tuning candidates.",
+    ),
+    output_config: Path = typer.Option(
+        Path("configs/profiles/m3_espeak_recommended.toml"),
+        "--output-config",
+        help="Output path for locked recommended profile.",
+    ),
+    max_candidates: int = typer.Option(
+        16,
+        "--max-candidates",
+        help="Maximum candidate profile count for auto tuning.",
+    ),
+) -> None:
+    """Run automated espeak tuning: generate candidates, benchmark, report, and lock profile."""
+    resolved_tts_input = tts_input or (run_root / "output" / "tts" / "tts_input.tr.json")
+    try:
+        artifacts = run_m3_espeak_tuning_automation(
+            run_root=run_root,
+            tts_input_json=resolved_tts_input,
+            base_config_path=base_config,
+            output_config_path=output_config,
+            max_candidates=max_candidates,
+        )
+    except FileNotFoundError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=23) from exc
+    except ValueError as exc:
+        typer.echo(f"Invalid M3 espeak tuning input: {exc}", err=True)
+        raise typer.Exit(code=24) from exc
+    except Exception as exc:  # noqa: BLE001
+        typer.echo(f"Unexpected M3 espeak tuning failure: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+
+    typer.echo(f"M3 espeak tuning candidates: {len(artifacts.generated_config_paths)}")
+    typer.echo(f"M3 espeak benchmark: {artifacts.benchmark_report_json}")
+    typer.echo(f"M3 espeak tuning report: {artifacts.tuning_report_markdown}")
+    typer.echo(f"M3 recommended profile: {artifacts.recommended_profile}")
+    typer.echo(f"M3 locked espeak config: {artifacts.recommended_config_path}")
+    typer.echo(f"M3 selection report: {artifacts.selection_report_json}")
+
+
+@app.command("finish-m3")
+def finish_m3(
+    run_root: Path = typer.Option(..., "--run-root", help="Run root directory created by run-m1."),
+    target_lang: str = typer.Option("tr", "--target-lang", help="Target language code."),
+    translation_output_json: Path | None = typer.Option(
+        None,
+        "--translation-output-json",
+        help="Optional explicit translation output JSON path.",
+    ),
+    tts_input: Path | None = typer.Option(
+        None,
+        "--tts-input",
+        help="Optional explicit TTS input JSON path.",
+    ),
+    base_config: Path = typer.Option(
+        Path("configs/profiles/gtx1650_espeak.toml"),
+        "--base-config",
+        help="Base espeak config path for auto tuning.",
+    ),
+    tuned_output_config: Path = typer.Option(
+        Path("configs/profiles/m3_espeak_recommended.toml"),
+        "--tuned-output-config",
+        help="Output path for tuned/locked profile.",
+    ),
+    auto_tune: bool = typer.Option(
+        True,
+        "--auto-tune/--no-auto-tune",
+        help="Run espeak auto tuning before final M3 run.",
+    ),
+    max_candidates: int = typer.Option(
+        16,
+        "--max-candidates",
+        help="Maximum espeak candidate count for auto tuning.",
+    ),
+) -> None:
+    """Finish M3 workflow: prepare, optional espeak auto tuning, strict-gate final run."""
+    try:
+        artifacts = run_m3_closure_workflow(
+            run_root=run_root,
+            target_lang=target_lang,
+            translation_output_json=translation_output_json,
+            tts_input_json=tts_input,
+            base_config_path=base_config,
+            tuned_output_config_path=tuned_output_config,
+            auto_tune=auto_tune,
+            max_candidates=max_candidates,
+        )
+    except FileNotFoundError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=25) from exc
+    except ValueError as exc:
+        typer.echo(f"Invalid M3 finish input: {exc}", err=True)
+        raise typer.Exit(code=26) from exc
+    except RuntimeError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=27) from exc
+    except Exception as exc:  # noqa: BLE001
+        typer.echo(f"Unexpected M3 finish failure: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+
+    typer.echo(f"M3 finish TTS input: {artifacts.tts_input_json}")
+    typer.echo(f"M3 selected config: {artifacts.selected_config_path}")
+    typer.echo(f"M3 output: {artifacts.m3_artifacts.tts_output_json}")
+    typer.echo(f"M3 QA report: {artifacts.m3_artifacts.qa_report_json}")
+    typer.echo(f"M3 stitched preview: {artifacts.m3_artifacts.stitched_preview_wav}")
+    typer.echo(f"M3 closure report: {artifacts.closure_report_json}")
 
 
 @app.command("ui-demo")

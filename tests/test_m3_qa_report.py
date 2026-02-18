@@ -19,6 +19,8 @@ def _tts_config() -> TTSConfig:
         espeak_adaptive_rate_max_passes=3,
         espeak_adaptive_rate_tolerance_seconds=0.06,
         max_duration_delta_seconds=0.05,
+        qa_max_postfit_segment_ratio=0.60,
+        qa_max_postfit_seconds_ratio=0.35,
         qa_fail_on_flags=False,
         qa_allowed_flags=(),
     )
@@ -62,3 +64,48 @@ def test_build_m3_qa_report_flags_duration_and_empty_text() -> None:
     flags = report["quality_flags"]
     assert "duration_out_of_tolerance_present" in flags
     assert "empty_tts_text_present" in flags
+
+
+def test_build_m3_qa_report_flags_excessive_postfit_adjustment() -> None:
+    doc = TTSOutputDocument(
+        schema_version="1.0",
+        stage="m3_tts_output",
+        generated_at_utc="2026-02-18T10:00:00Z",
+        backend="mock",
+        language="tr",
+        sample_rate=24000,
+        segment_count=2,
+        segments=[
+            TTSOutputSegment(
+                id=0,
+                start=0.0,
+                end=1.0,
+                target_duration=1.0,
+                synthesized_duration=1.0,
+                duration_delta=0.0,
+                target_text="merhaba",
+                audio_path="seg_000000.wav",
+            ),
+            TTSOutputSegment(
+                id=1,
+                start=1.0,
+                end=2.0,
+                target_duration=1.0,
+                synthesized_duration=1.0,
+                duration_delta=0.0,
+                target_text="dunya",
+                audio_path="seg_000001.wav",
+            ),
+        ],
+    )
+    report = build_m3_qa_report(
+        doc,
+        _tts_config(),
+        postfit_padding_segments=2,
+        postfit_trim_segments=0,
+        postfit_total_padded_seconds=1.0,
+        postfit_total_trimmed_seconds=0.0,
+    )
+    flags = report["quality_flags"]
+    assert "postfit_segment_ratio_above_max" in flags
+    assert "postfit_seconds_ratio_above_max" in flags

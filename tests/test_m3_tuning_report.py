@@ -21,6 +21,10 @@ def test_build_m3_tuning_report_markdown(tmp_path: Path) -> None:
                         "total_pipeline_seconds": 1.2,
                         "max_abs_duration_delta_seconds": 0.03,
                         "quality_flag_count": 0,
+                        "postfit_padding_segments": 0,
+                        "postfit_trim_segments": 1,
+                        "postfit_total_padded_seconds": 0.0,
+                        "postfit_total_trimmed_seconds": 0.12,
                         "error": None,
                     },
                     {
@@ -44,5 +48,5 @@ def test_build_m3_tuning_report_markdown(tmp_path: Path) -> None:
     text = report_md.read_text(encoding="utf-8")
     assert "# M3 Tuning Report" in text
     assert "`p_fast`" in text
+    assert "0/1" in text
     assert "missing espeak" in text
-

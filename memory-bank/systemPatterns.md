@@ -1,4 +1,4 @@
-# System Patterns
+﻿# System Patterns
 
 ## Mimari Yaklasim
 Pipeline tabanli, moduler, asamali genisletilebilir bir mimari.
@@ -67,6 +67,7 @@ Pipeline tabanli, moduler, asamali genisletilebilir bir mimari.
 - Desteklenen backendler: `mock`, `espeak`
 - `espeak` sure uyumu: hedef sureye yaklasmak icin adaptif hiz denemeleri (bounded retry)
 - Segment bazli WAV ciktilari: `output/tts/segments/seg_XXXXXX.wav`
+- Sure post-fit: hedef sÃ¼reden kisa kalan segmentlere WAV sonuna sessizlik padding
 - Segment stitching preview cikti: `output/tts/tts_preview_stitched.<lang>.wav`
 - Cikti: `output/tts/tts_output.tr.json`
 - QA: `qa.m3_report.build_m3_qa_report`
@@ -74,16 +75,28 @@ Pipeline tabanli, moduler, asamali genisletilebilir bir mimari.
 - M3 QA kapsami:
   - sure toleransi delta kontrolu
   - bos hedef metin kontrolu
+  - post-fit mudahale yogunlugu kontrolu (segment orani + sure orani)
 - M3 QA acceptance gate:
   - QA raporundaki `quality_flags` -> whitelist disinda kalanlar `blocked_flags`
   - `tts.qa_fail_on_flags=true` ise pipeline `RuntimeError` ile durur
   - `run_m3_manifest.json` icinde `qa_gate` sonucu yazilir
+- M3 run manifest ek alani:
+  - `duration_postfit.silence_padding_applied_segments`
+  - `duration_postfit.total_padded_seconds`
+  - `duration_postfit.trim_applied_segments`
+  - `duration_postfit.total_trimmed_seconds`
+- M3 QA yeni bayraklar:
+  - `postfit_segment_ratio_above_max`
+  - `postfit_seconds_ratio_above_max`
 
 ## M3 Benchmark Akisi
 - `cli.benchmark-m3` -> `pipeline.m3_benchmark.run_m3_profile_benchmark`
 - Ayni `tts_input` uzerinde coklu profil calistirma
 - Cikti: `benchmarks/m3_profile_benchmark.json`
 - Rapor: profil bazli status + sure + max sure sapmasi + kalite flag + onerilen profil
+- Rapor ayrica post-fit etkisini tasir:
+  - `postfit_padding_segments`, `postfit_trim_segments`
+  - `postfit_total_padded_seconds`, `postfit_total_trimmed_seconds`
 - Benchmark icin stitched preview dosyalari profil bazli ayrilir:
   - `benchmarks/tts_preview_stitched.<profile>.wav`
 
@@ -92,13 +105,51 @@ Pipeline tabanli, moduler, asamali genisletilebilir bir mimari.
 - Girdi: `benchmarks/m3_profile_benchmark.json`
 - Cikti: `benchmarks/m3_tuning_report.md`
 - Rapor icerigi: onerilen profil + profil bazli markdown tablo + ranking
+- Tuning tablosu post-fit segment/sure etkisini de gosterir.
+
+## M3 Finalizasyon Akisi
+- `cli.finalize-m3-profile` -> `pipeline.m3_finalize.finalize_m3_profile_selection`
+- Girdi: `benchmarks/m3_profile_benchmark.json`
+- Cikti:
+  - `configs/profiles/m3_recommended.toml` (veya `--output-config`)
+  - `benchmarks/m3_profile_selection.json`
+- Amac: benchmark'ta onerilen profili sabitleyip M3 kapanisinda tekrar edilebilir profil secimi saglamak.
+
+## M3 Espeak Otomatik Tuning Akisi
+- `cli.tune-m3-espeak` -> `pipeline.m3_espeak_tune.run_m3_espeak_tuning_automation`
+- Zincir:
+  - espeak aday profil override dosyalari uretimi
+  - `benchmark-m3` calistirma
+  - `report-m3-tuning` markdown uretimi
+  - `finalize-m3-profile` ile onerilen profili kilitleme
+- Ciktilar:
+  - `benchmarks/espeak_tune/configs/*.toml`
+  - `benchmarks/espeak_tune/m3_espeak_tuning_benchmark.json`
+  - `benchmarks/espeak_tune/m3_espeak_tuning_report.md`
+  - `benchmarks/espeak_tune/m3_espeak_tuning_meta.json`
+
+## M3 Kapanis Akisi
+- `cli.finish-m3` -> `pipeline.m3_closure.run_m3_closure_workflow`
+- Zincir:
+  - M3 input hazirlama (`prepare_m3_tts_input`)
+  - opsiyonel `tune-m3-espeak` otomasyonu
+  - secilen profil ile strict TTS QA gate acik final `run-m3`
+- Cikti:
+  - `benchmarks/m3_closure_report.json`
 
 ## M3 UI Demo Akisi
 - `cli.ui-demo` -> `ui_demo.run_ui_demo_server`
 - Lokal HTTP panel, backend fonksiyonlarini dogrudan cagirir:
+  - `pipeline.m1.run_m1_pipeline` (YouTube URL akisinda)
+  - `pipeline.m2_prep.prepare_m2_translation_input` (YouTube URL akisinda)
+  - `pipeline.m2.run_m2_pipeline` (YouTube URL akisinda)
   - `pipeline.m3_prep.prepare_m3_tts_input` (opsiyonel)
   - `pipeline.m3.run_m3_pipeline`
 - Cikti: JSON sonucunda M3 artefakt yollari + QA ozeti + segment preview
+- HTTP endpointler:
+  - `POST /run-youtube-dub`: URL tabanli M1->M2->(opsiyonel)M3 zinciri
+  - `POST /run-m3`: mevcut run-root uzerinden M3 testi
+- UI/JSON cevaplarinda `Cache-Control: no-store` kullanilir (tarayici cache kaynakli eski UI gorunumlerini engellemek icin).
 
 ## Windows Startup Akisi
 - `open_project.bat`
@@ -156,3 +207,4 @@ Pipeline tabanli, moduler, asamali genisletilebilir bir mimari.
 - Birim test: her modulun cekirdek islevleri
 - Entegrasyon test: uctan uca kisa ornek video
 - Regresyon test: ornek veri seti ile kalite metrik karsilastirmasi
+

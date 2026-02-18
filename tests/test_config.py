@@ -50,6 +50,8 @@ def test_load_config_applies_override(tmp_path: Path) -> None:
     assert config.tts.espeak_adaptive_rate_max_passes == 3
     assert config.tts.espeak_adaptive_rate_tolerance_seconds == 0.06
     assert config.tts.max_duration_delta_seconds == 0.08
+    assert config.tts.qa_max_postfit_segment_ratio == 0.60
+    assert config.tts.qa_max_postfit_seconds_ratio == 0.35
 
 
 def test_load_config_rejects_non_positive_values(tmp_path: Path) -> None:
@@ -211,4 +213,36 @@ def test_load_config_rejects_non_positive_tts_adaptive_rate_passes(tmp_path: Pat
     )
 
     with pytest.raises(ValueError, match="tts.espeak_adaptive_rate_max_passes"):
+        load_config(override)
+
+
+def test_load_config_rejects_tts_postfit_segment_ratio_above_one(tmp_path: Path) -> None:
+    override = tmp_path / "invalid_tts_postfit_segment_ratio.toml"
+    override.write_text(
+        "\n".join(
+            [
+                "[tts]",
+                "qa_max_postfit_segment_ratio = 1.20",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="tts.qa_max_postfit_segment_ratio"):
+        load_config(override)
+
+
+def test_load_config_rejects_tts_postfit_seconds_ratio_above_one(tmp_path: Path) -> None:
+    override = tmp_path / "invalid_tts_postfit_seconds_ratio.toml"
+    override.write_text(
+        "\n".join(
+            [
+                "[tts]",
+                "qa_max_postfit_seconds_ratio = 1.10",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="tts.qa_max_postfit_seconds_ratio"):
         load_config(override)
