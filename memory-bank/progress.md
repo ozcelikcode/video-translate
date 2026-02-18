@@ -64,6 +64,8 @@ M1 ve M2 tamamlandi (%100), M3 aktif gelistirme asamasinda.
 - M3 lokal UI demo komutu eklendi (`ui-demo`).
 - M3 UI demo backend akisi eklendi (`src/video_translate/ui_demo.py`).
 - M3 UI demo testi eklendi (`tests/test_ui_demo.py`).
+- Windows one-click calistirma scripti eklendi ve stabilize edildi (`open_project.bat`).
+- `open_project.bat` icin `--skip-install` + `--no-ui` akis dogrulamasi basarili.
 - TTS konfigurasyon blogu eklendi (`[tts]`).
 - TTS config'e `espeak` alanlari eklendi (`espeak_bin/voice/speed/pitch`).
 - Doctor/preflight `espeak` binary kontrolu eklendi.
@@ -72,7 +74,7 @@ M1 ve M2 tamamlandi (%100), M3 aktif gelistirme asamasinda.
 - M2 milestone dokumani baslatildi.
 - M3 milestone dokumani baslatildi.
 - Temel birim testleri genisletildi ve gecti.
-- Son test sonucu: `50 passed` (2026-02-17).
+- Son test sonucu: `50 passed` (2026-02-18).
 
 ## Calisma Agaci Durumu (Handoff)
 - Commit edilmemis degisiklikler mevcut.
@@ -102,11 +104,11 @@ M1 ve M2 tamamlandi (%100), M3 aktif gelistirme asamasinda.
 - `m3_tuning_report.md` uzerinden profil secim kararini dokumante etmek.
 - UI uzerinden M3 akisini manuel test edip UX notlarini toplamak.
 
-## Tamamlama Tahmini (2026-02-17)
-- Genel tamamlanma: `%80` (tahmini)
+## Tamamlama Tahmini (2026-02-18)
+- Genel tamamlanma: `%82` (tahmini)
 - `M1`: `%100` (gercek URL calismasi + QA raporu tamam)
 - `M2`: `%100` (gercek ceviri kosusu + QA + benchmark tamam)
-- `M3`: `%70` (stitched preview + adaptif hiz + m3 benchmark + tuning raporu + ui demo tamam; saha tuning ve ritim mikro-iyilestirme eksik)
+- `M3`: `%73` (stitched preview + adaptif hiz + m3 benchmark + tuning raporu + ui demo + one-click startup tamam; saha tuning ve ritim mikro-iyilestirme eksik)
 - `M4`: `%0`
 - `M5`: `%0`
 

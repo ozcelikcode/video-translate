@@ -100,6 +100,15 @@ Pipeline tabanli, moduler, asamali genisletilebilir bir mimari.
   - `pipeline.m3.run_m3_pipeline`
 - Cikti: JSON sonucunda M3 artefakt yollari + QA ozeti + segment preview
 
+## Windows Startup Akisi
+- `open_project.bat`
+- Sirali akil:
+  - Python bulunurlugu kontrolu
+  - `.venv` olusturma (yoksa)
+  - `pip install -e .[dev,m2]` (opsiyonel skip)
+  - `video-translate doctor` (profil varsa profil ile)
+  - `video-translate ui-demo` (opsiyonel no-ui)
+
 ## M3 Contract Ozet
 - M3 input stage: `m3_tts_input`
   - Segment alanlari: `id/start/end/duration/target_text/target_word_count`

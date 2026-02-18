@@ -77,6 +77,26 @@ video-translate ui-demo --host 127.0.0.1 --port 8765
 
 Then open `http://127.0.0.1:8765` in browser.
 
+One-click Windows startup (`.bat`):
+
+```bat
+open_project.bat
+```
+
+Optional:
+
+```bat
+open_project.bat 127.0.0.1 8765 --skip-install
+open_project.bat 127.0.0.1 8765 --no-ui
+```
+
+This script does:
+- Python version check (3.12+)
+- `.venv` creation (if missing)
+- dependency install (`pip install -e .[dev,m2]`)
+- `doctor` check
+- starts local UI demo
+
 Run M3 with local `espeak` Turkish voice:
 
 ```bash

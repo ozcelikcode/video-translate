@@ -3,8 +3,8 @@
 ## Mevcut Odak
 M3 gercek yerel TTS backend'e gecis baslatildi (`espeak`). Simdi odak sure uyumu ve ritim adaptasyonunu iyilestirmek.
 
-## Handoff Snapshot (2026-02-17)
-- Son test durumu: `python -m pytest -q` -> `50 passed`.
+## Handoff Snapshot (2026-02-18)
+- Son test durumu: `python -m pytest -q` -> `50 passed` (2026-02-18).
 - CLI komutlari:
   - `doctor`
   - `run-m1`
@@ -127,6 +127,11 @@ M3 gercek yerel TTS backend'e gecis baslatildi (`espeak`). Simdi odak sure uyumu
   - `src/video_translate/ui_demo.py`
   - `video-translate ui-demo --host 127.0.0.1 --port 8765`
   - test: `tests/test_ui_demo.py`
+- Windows one-click acilis scripti stabilize edildi:
+  - `open_project.bat`
+  - Akis: `.venv` -> `pip install -e .[dev,m2]` -> `doctor` -> `ui-demo`
+  - `--skip-install` ve `--no-ui` bayraklari dogrulandi
+  - CMD parser hatasi (`if (...)` icinde kapanis parantezi) giderildi
 
 ## Aktif Kararlar
 - Gelistirme `M1 -> M5` kademeleriyle ilerleyecek.

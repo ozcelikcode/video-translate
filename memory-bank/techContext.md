@@ -93,7 +93,10 @@
 - M3 benchmark raporu: `benchmarks/m3_profile_benchmark.json`
 - M3 tuning raporu: `benchmarks/m3_tuning_report.md`
 - UI demo dokumani: `docs/ui-demo.md`
-- Son tam test sonucu: `50 passed` (2026-02-17)
+- Windows startup script: `open_project.bat`
+  - `.venv` olusturma + `pip install -e .[dev,m2]` + `doctor` + `ui-demo`
+  - Opsiyonlar: `--skip-install`, `--no-ui`
+- Son tam test sonucu: `50 passed` (2026-02-18)
 
 ## Handoff Teknik Notlari
 - M3 icin harici API kullanilmiyor; mevcut backend tamamen yerel dosya uretimi yapiyor.
