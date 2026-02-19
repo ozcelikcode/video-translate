@@ -3,8 +3,8 @@
 ## Mevcut Odak
 Proje v1 kapanis durumu: tek komutla uctan uca akisi calisan, QA gate destekli M1->M2->M3 dublaj sistemi.
 
-## Handoff Snapshot (2026-02-18)
-- Son test durumu: `python -m pytest -q` -> `63 passed` (2026-02-18).
+## Handoff Snapshot (2026-02-19)
+- Son test durumu: `python -m pytest -q` -> `67 passed` (2026-02-19).
 - CLI komutlari:
   - `doctor`
   - `run-m1`
@@ -19,7 +19,7 @@ Proje v1 kapanis durumu: tek komutla uctan uca akisi calisan, QA gate destekli M
   - `finalize-m3-profile`
   - `tune-m3-espeak`
   - `finish-m3`
-  - `ui-demo`
+  - `ui`
 - M3 su an `mock` ve `espeak` backendleri ile calisiyor.
 - Calisma agaci temiz degil (commit edilmemis degisiklikler var).
 - Eklenen yeni M3 dosyalari:
@@ -127,24 +127,24 @@ Proje v1 kapanis durumu: tek komutla uctan uca akisi calisan, QA gate destekli M
   - pipeline: `src/video_translate/pipeline/m3_tuning_report.py`
 - Gercek run uzerinde tuning raporu uretildi:
   - `runs/finalize_m1m2/m1_real_medium_cpu/benchmarks/m3_tuning_report.md`
-- M3 backend ile bagli lokal UI demo eklendi:
-  - `src/video_translate/ui_demo.py`
-  - `video-translate ui-demo --host 127.0.0.1 --port 8765`
-  - test: `tests/test_ui_demo.py`
+- M3 backend ile bagli lokal UI eklendi:
+  - `src/video_translate/ui.py`
+  - `video-translate ui --host 127.0.0.1 --port 8765`
+  - test: `tests/test_ui.py`
 - Windows one-click acilis scripti stabilize edildi:
   - `open_project.bat`
-  - Akis: `.venv` -> `pip install -e .[dev,m2]` -> `doctor` -> `ui-demo`
+  - Akis: `.venv` -> `pip install -e .[dev,m2]` -> `doctor` -> `ui`
   - `--skip-install` ve `--no-ui` bayraklari dogrulandi
   - CMD parser hatasi (`if (...)` icinde kapanis parantezi) giderildi
-- UI demo YouTube entegrasyonu eklendi:
-  - `src/video_translate/ui_demo.py`
+- UI YouTube entegrasyonu eklendi:
+  - `src/video_translate/ui.py`
   - Yeni endpoint: `POST /run-youtube-dub`
   - Yeni is akisi: URL -> `run_m1` -> `prepare_m2` -> `run_m2` -> (opsiyonel) `prepare_m3` -> `run_m3`
   - Mevcut `POST /run-m3` akisiyla birlikte ayni panelde calisiyor
-  - Test: `tests/test_ui_demo.py::test_execute_youtube_dub_demo_runs_full_chain`
+  - Test: `tests/test_ui.py::test_execute_youtube_dub_run_full_chain`
 - UI cache gorunurluk sorunu icin no-cache response basliklari eklendi.
 - UI icine gorunur build etiketi eklendi:
-  - `UI Build: 2026-02-18-youtube-m3fit`
+  - `UI Build: 2026-02-19-output-downloads`
 - M3 sure uyumu iyilestirildi:
   - kisa kalan segment WAV'lerine hedef sureye kadar sessizlik padding uygulanir
   - `run_m3_manifest.json` icinde `duration_postfit` metrikleri yazilir
@@ -185,23 +185,63 @@ Proje v1 kapanis durumu: tek komutla uctan uca akisi calisan, QA gate destekli M
   - `tests/test_m3_finish.py` -> `tests/test_m3_closure.py`
   - CLI import/cagri referanslari `m3_closure` uzerine alindi.
 - UI YouTube giris gorunurlugu guclendirildi:
-  - `src/video_translate/ui_demo.py` icinde "YouTube Link Ekle" odak kutusu eklendi.
-  - YouTube kontrol gorunurlugu testle sabitlendi: `tests/test_ui_demo.py::test_html_page_contains_visible_youtube_controls`.
+  - `src/video_translate/ui.py` icinde "YouTube Link Ekle" odak kutusu eklendi.
+  - YouTube kontrol gorunurlugu testle sabitlendi: `tests/test_ui.py::test_html_page_contains_visible_youtube_controls`.
 - UI icine kullanim kolayligi icin text objesi eklendi:
   - "CLI Kullanim Komutlari" panelinde `run-dub` ve `--m3-closure` komutlari gosteriliyor.
-  - test: `tests/test_ui_demo.py::test_html_page_contains_visible_youtube_controls`.
+  - test: `tests/test_ui.py::test_html_page_contains_visible_youtube_controls`.
+- UI ana sayfa metinleri production odaga cekildi:
+  - Baslik: `Video Translate Studio`
+  - Aciklama: test/demo dili yerine ana operasyon dili
+  - Build etiketi dynamic hale getirildi (`UI_DEMO_VERSION`)
+  - M3 ikincil alan etiketi: "Gelişmis M3 araci (opsiyonel...)"
+- Canli ortamda eski UI gorunme kok nedeni bulundu:
+  - Ayni portta (`8765`) iki farkli `python -m video_translate.cli ui` process LISTENING durumundaydi.
+  - Baglanti bazen eski process'e dustugu icin eski "M3 UI" gorunuyordu.
+  - `open_project.bat` icine porttaki eski processleri otomatik kapatma adimi eklendi.
+- `open_project.bat` parser hatasi giderildi:
+  - UI acilisindan hemen once gorulen `... was unexpected at this time.` hatasi, batch `for`/`findstr` blok parser kirilmasindan kaynaklaniyordu.
+  - Port temizleme adimi tek satir PowerShell komutuna cevrildi.
+  - Dogrulama: script `--skip-install --no-ui` modunda temiz cikti, normal modda UI sureci acik kaldi.
+- ASR CUDA DLL fallback guclendirildi:
+  - YouTube akisi sirasinda gorulen `Library cublas64_12.dll is not found or cannot be loaded` hatasi icin CPU fallback eklendi.
+  - `asr.whisper._is_probable_oom_error` CUDA runtime DLL eksikligi mesajlarini da kapsayacak sekilde genisletildi.
+  - test guncellendi: `tests/test_asr_fallback.py`.
+- ASR fallback politikasi sertlestirildi:
+  - Ilk deneme `cuda`/primary ayarlarla basarisiz olursa ve fallback ayarlari primary'den farkliysa, hata turune bakmadan CPU fallback denenir.
+  - Bu sayede CUDA kutuphane yukleme hatalarinda da akis kesilmez.
+  - ek test: `test_transcribe_audio_falls_back_on_non_oom_when_primary_is_cuda`.
+- ASR fallback kok neden analizi tamamlandi:
+  - `faster-whisper` tarafinda hata bazi durumlarda `model.transcribe()` cagrisi sirasinda degil, donen generator iterasyonunda firtliyor.
+  - Onceki try/except sadece ilk cagrida oldugu icin bu hata fallback'e dusmeden yukari cikiyordu.
+  - `asr.whisper` icine generator'i erken materialize eden `_transcribe_and_collect` eklendi; iterasyon hatasi da fallback kapsamina alindi.
+  - ek test: `test_transcribe_audio_falls_back_when_generator_raises_on_iteration`.
+  - canli dogrulama: `run-m1` komutu ve `POST /run-youtube-dub` akisi `ok=true` dondu.
 - Uctan uca tek-komut akis eklendi:
   - `pipeline.full_run.run_full_dub_pipeline`
   - `cli.run-dub`
   - URL -> M1 -> prepare-m2 -> run-m2 -> prepare-m3 -> run-m3
   - opsiyonel `--m3-closure` ile `finish-m3` zinciri ayni komuttan aktif edilebilir
   - test: `tests/test_full_run_pipeline.py`
+- UI cikti erisimi guclendirildi:
+  - `src/video_translate/ui.py` icine guvenli indirme endpoint'i eklendi: `GET /download?path=...`
+  - Endpoint yalnizca repo root altindaki dosyalari indirir (path traversal engeli).
+  - YouTube ve M3 yanitlarina `output_dir` ve `downloadables` alanlari eklendi.
+  - UI panelinde `Cikti klasoru` ve `Indirilebilir Dosyalar` bolumleri gorunur hale getirildi.
+  - testler guncellendi: `tests/test_ui.py`
+- UI adlandirma standardi uretim odagina alindi:
+  - `src/video_translate/ui.py`
+  - CLI komutu: `video-translate ui`
+  - Dokuman: `docs/ui.md`
+  - test dosyasi: `tests/test_ui.py`
 
 ## Aktif Kararlar
 - Gelistirme `M1 -> M5` kademeleriyle ilerleyecek.
 - Ilk uygulama hedefi `M1` (ingest + ASR + zaman damgalari).
 - Proje boyunca gereksiz dosya ve debug artigi birakilmayacak.
 - Kod ve klasor adlandirmalari profesyonel ve tutarli olacak.
+- Uretim klasor/adlandirma tarafinda `demo/test` ifadesi kullanilmayacak; test dosyalari yalnizca `tests/` altinda tutulacak.
+- Gecici debug ciktilari yalnizca debug amacli ayrik alanda tutulacak.
 
 ## Sonraki Adimlar
 - Bu repo kapsaminda zorunlu teknik adim kalmadi; sonraki isler yeni faz/backlog olarak acilabilir.
@@ -216,4 +256,5 @@ Proje v1 kapanis durumu: tek komutla uctan uca akisi calisan, QA gate destekli M
 ## Dikkat Notlari
 - Senkron hedefi yuksek, fakat lip reading kullanilmayacak.
 - Kaliteyi guvencelemek icin metrik odakli QA en bastan planlanacak.
+
 

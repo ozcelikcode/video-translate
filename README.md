@@ -89,16 +89,18 @@ Run M3 finish workflow (prepare + optional auto tune + strict QA gate final run)
 video-translate finish-m3 --run-root runs/m1_YYYYMMDD_HHMMSS
 ```
 
-Run lightweight local M3 UI demo:
+Run local UI:
 
 ```bash
-video-translate ui-demo --host 127.0.0.1 --port 8765
+video-translate ui --host 127.0.0.1 --port 8765
 ```
 
 Then open `http://127.0.0.1:8765` in browser.
 UI now supports YouTube URL based end-to-end flow:
 - `M1 -> prepare-m2 -> run-m2 -> (optional) prepare-m3 -> run-m3`
 - and existing M3-only run-root testing.
+- run sonucunda `Cikti klasoru` ve `Indirilebilir Dosyalar` paneli.
+- UI dosya indirme endpointi: `GET /download?path=<repo-ici-dosya-yolu>`.
 
 One-click Windows startup (`.bat`):
 
@@ -118,7 +120,7 @@ This script does:
 - `.venv` creation (if missing)
 - dependency install (`pip install -e .[dev,m2]`)
 - `doctor` check
-- starts local UI demo
+- starts local UI
 
 Run M3 with local `espeak` Turkish voice:
 
@@ -188,7 +190,7 @@ video-translate run-m2 --run-root runs/m1_YYYYMMDD_HHMMSS --config configs/profi
 video-translate run-m1 \
   --url "https://www.youtube.com/watch?v=VIDEO_ID" \
   --config configs/default.toml \
-  --run-id demo_run_001 \
+  --run-id run_001 \
   --workspace runs
 ```
 

@@ -48,6 +48,7 @@ def _asr_config() -> ASRConfig:
 def test_is_probable_oom_error_detects_cuda_messages() -> None:
     assert _is_probable_oom_error(RuntimeError("CUDA out of memory"))
     assert _is_probable_oom_error(RuntimeError("cuDNN_STATUS_ALLOC_FAILED"))
+    assert _is_probable_oom_error(RuntimeError("Library cublas64_12.dll is not found or cannot be loaded"))
     assert not _is_probable_oom_error(RuntimeError("some different error"))
 
 
@@ -58,6 +59,62 @@ def test_transcribe_audio_falls_back_on_oom(monkeypatch: Any, tmp_path: Path) ->
         calls.append((kwargs["model_name"], kwargs["device"], kwargs["compute_type"]))
         if len(calls) == 1:
             raise RuntimeError("CUDA out of memory")
+        return ([_DummySegment()], _DummyInfo())
+
+    monkeypatch.setattr(
+        "video_translate.asr.whisper._transcribe_with_settings",
+        fake_transcribe_with_settings,
+    )
+
+    result = transcribe_audio(tmp_path / "audio.wav", _asr_config())
+
+    assert len(calls) == 2
+    assert calls[0][1] == "cuda"
+    assert calls[1][1] == "cpu"
+    assert result.language == "en"
+    assert len(result.segments) == 1
+
+
+def test_transcribe_audio_falls_back_on_non_oom_when_primary_is_cuda(
+    monkeypatch: Any, tmp_path: Path
+) -> None:
+    calls: list[tuple[str, str, str]] = []
+
+    def fake_transcribe_with_settings(**kwargs: Any) -> tuple[list[_DummySegment], _DummyInfo]:
+        calls.append((kwargs["model_name"], kwargs["device"], kwargs["compute_type"]))
+        if len(calls) == 1:
+            raise RuntimeError("Library cublas64_12.dll is not found or cannot be loaded")
+        return ([_DummySegment()], _DummyInfo())
+
+    monkeypatch.setattr(
+        "video_translate.asr.whisper._transcribe_with_settings",
+        fake_transcribe_with_settings,
+    )
+
+    result = transcribe_audio(tmp_path / "audio.wav", _asr_config())
+
+    assert len(calls) == 2
+    assert calls[0][1] == "cuda"
+    assert calls[1][1] == "cpu"
+    assert result.language == "en"
+
+
+def test_transcribe_audio_falls_back_when_generator_raises_on_iteration(
+    monkeypatch: Any, tmp_path: Path
+) -> None:
+    calls: list[tuple[str, str, str]] = []
+
+    class _FailingIter:
+        def __iter__(self) -> "_FailingIter":
+            return self
+
+        def __next__(self) -> _DummySegment:
+            raise RuntimeError("Library cublas64_12.dll is not found or cannot be loaded")
+
+    def fake_transcribe_with_settings(**kwargs: Any) -> tuple[Any, _DummyInfo]:
+        calls.append((kwargs["model_name"], kwargs["device"], kwargs["compute_type"]))
+        if len(calls) == 1:
+            return (_FailingIter(), _DummyInfo())
         return ([_DummySegment()], _DummyInfo())
 
     monkeypatch.setattr(

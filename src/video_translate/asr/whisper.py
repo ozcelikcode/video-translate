@@ -13,6 +13,13 @@ def _is_probable_oom_error(exc: Exception) -> bool:
         "out of memory" in message
         or "cuda error" in message
         or "cudnn_status_alloc_failed" in message
+        # Missing CUDA runtime libraries on Windows/Linux should also trigger
+        # CPU fallback when fallback_on_oom is enabled.
+        or "cublas64_" in message
+        or "cudart64_" in message
+        or "libcublas" in message
+        or "libcudart" in message
+        or "cannot be loaded" in message and "cublas" in message
     )
 
 
@@ -40,9 +47,29 @@ def _transcribe_with_settings(
     )
 
 
+def _transcribe_and_collect(
+    *,
+    audio_path: Path,
+    model_name: str,
+    device: str,
+    compute_type: str,
+    asr_config: ASRConfig,
+) -> tuple[list[Any], Any]:
+    segments_iter, info = _transcribe_with_settings(
+        audio_path=audio_path,
+        model_name=model_name,
+        device=device,
+        compute_type=compute_type,
+        asr_config=asr_config,
+    )
+    # faster-whisper returns a generator that can raise at iteration time.
+    # Force evaluation here so fallback logic can catch runtime failures.
+    return list(segments_iter), info
+
+
 def transcribe_audio(audio_path: Path, asr_config: ASRConfig) -> TranscriptDocument:
     try:
-        segments_iter, info = _transcribe_with_settings(
+        raw_segments, info = _transcribe_and_collect(
             audio_path=audio_path,
             model_name=asr_config.model,
             device=asr_config.device,
@@ -50,9 +77,25 @@ def transcribe_audio(audio_path: Path, asr_config: ASRConfig) -> TranscriptDocum
             asr_config=asr_config,
         )
     except Exception as exc:  # noqa: BLE001
-        if not asr_config.fallback_on_oom or not _is_probable_oom_error(exc):
+        # Primary ASR run failed. If fallback is enabled and fallback settings
+        # differ from primary settings, retry on fallback path.
+        can_retry_with_fallback = (
+            asr_config.fallback_on_oom
+            and (
+                asr_config.device != asr_config.fallback_device
+                or asr_config.compute_type != asr_config.fallback_compute_type
+                or asr_config.model != asr_config.fallback_model
+            )
+        )
+        if not can_retry_with_fallback:
             raise
-        segments_iter, info = _transcribe_with_settings(
+        # Keep stricter error classification for same-device retries.
+        if (
+            asr_config.device == asr_config.fallback_device
+            and not _is_probable_oom_error(exc)
+        ):
+            raise
+        raw_segments, info = _transcribe_and_collect(
             audio_path=audio_path,
             model_name=asr_config.fallback_model,
             device=asr_config.fallback_device,
@@ -61,7 +104,7 @@ def transcribe_audio(audio_path: Path, asr_config: ASRConfig) -> TranscriptDocum
         )
 
     segments: list[TranscriptSegment] = []
-    for segment in segments_iter:
+    for segment in raw_segments:
         words: list[WordTimestamp] = []
         raw_words: list[Any] | None = getattr(segment, "words", None)
         if raw_words:

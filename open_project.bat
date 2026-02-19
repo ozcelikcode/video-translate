@@ -92,13 +92,15 @@ if "%NO_UI%"=="1" (
   goto :ok
 )
 
+powershell -NoProfile -Command "$ids=@(); try { $ids=@(Get-NetTCPConnection -LocalPort %PORT% -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique) } catch {}; foreach($id in $ids){ if($id -and $id -ne 0){ Stop-Process -Id $id -Force -ErrorAction SilentlyContinue } }" >nul 2>nul
+
 echo.
-echo [video-translate] UI demo baslatiliyor: http://%HOST%:%PORT%
+echo [video-translate] UI uygulamasi baslatiliyor: http://%HOST%:%PORT%
 echo [video-translate] Cikmak icin CTRL+C
 echo.
-"%VENV_PY%" -m video_translate.cli ui-demo --host "%HOST%" --port "%PORT%"
+"%VENV_PY%" -m video_translate.cli ui --host "%HOST%" --port "%PORT%"
 if errorlevel 1 (
-  echo [ERROR] UI demo beklenmeyen sekilde sonlandi.
+  echo [ERROR] UI uygulamasi beklenmeyen sekilde sonlandi.
   goto :fail
 )
 

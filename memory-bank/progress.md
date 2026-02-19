@@ -61,15 +61,15 @@ Proje v1 (M1->M3) tamamlandi; uctan uca yerel ve API'siz dublaj akislari calisiy
 - Benchmark stitched preview dosyalari profil bazli ayrildi (`benchmarks/tts_preview_stitched.<profile>.wav`).
 - M3 tuning markdown rapor komutu eklendi (`report-m3-tuning`).
 - M3 tuning raporu eklendi (`benchmarks/m3_tuning_report.md`).
-- M3 lokal UI demo komutu eklendi (`ui-demo`).
-- M3 UI demo backend akisi eklendi (`src/video_translate/ui_demo.py`).
-- M3 UI demo testi eklendi (`tests/test_ui_demo.py`).
+- M3 lokal UI komutu eklendi (`ui`).
+- M3 UI backend akisi eklendi (`src/video_translate/ui.py`).
+- M3 UI testi eklendi (`tests/test_ui.py`).
 - Windows one-click calistirma scripti eklendi ve stabilize edildi (`open_project.bat`).
 - `open_project.bat` icin `--skip-install` + `--no-ui` akis dogrulamasi basarili.
-- UI demo icin YouTube URL entegrasyonu eklendi (`POST /run-youtube-dub`).
-- UI demo'da URL tabanli M1->M2->(opsiyonel)M3 zinciri aktif.
-- UI demo cache sorunu icin no-cache HTTP basliklari eklendi.
-- UI icinde build etiketi eklendi (`2026-02-18-youtube-m3fit`).
+- UI icin YouTube URL entegrasyonu eklendi (`POST /run-youtube-dub`).
+- UI'da URL tabanli M1->M2->(opsiyonel)M3 zinciri aktif.
+- UI cache sorunu icin no-cache HTTP basliklari eklendi.
+- UI icinde build etiketi eklendi (`2026-02-19-output-downloads`).
 - M3 sure post-fit eklendi: kisa segmentlere sessizlik padding.
 - M3 manifest'e `duration_postfit` metrikleri eklendi.
 - M3 sure post-fit genisletildi: uzun segmentlere WAV trim eklendi.
@@ -86,12 +86,40 @@ Proje v1 (M1->M3) tamamlandi; uctan uca yerel ve API'siz dublaj akislari calisiy
   - `src/video_translate/pipeline/m3_finish.py` -> `src/video_translate/pipeline/m3_closure.py`
   - `tests/test_m3_finish.py` -> `tests/test_m3_closure.py`
 - UI'da YouTube link giris gorunurlugu guclendirildi (odak kutusu + acik yonlendirme metni).
-- UI gorunurluk testi eklendi (`tests/test_ui_demo.py::test_html_page_contains_visible_youtube_controls`).
+- UI gorunurluk testi eklendi (`tests/test_ui.py::test_html_page_contains_visible_youtube_controls`).
 - UI'da kullanim kolayligi icin "CLI Kullanim Komutlari" text paneli eklendi (`run-dub` ve `--m3-closure` ornekleri).
+- UI ana ekran dili "demo/test" yerine production operasyon diline guncellendi (`Video Translate Studio`).
+- Port cakisma sertlestirmesi eklendi:
+  - `open_project.bat` UI acilisindan once ayni porttaki eski LISTENING processleri kapatir.
+- `open_project.bat` kapanma hatasi cozuldu:
+  - `... was unexpected at this time.` batch parser hatasi giderildi.
+  - Port temizleme adimi `for/findstr` yerine guvenli PowerShell tek satirina alindi.
+- ASR fallback iyilestirmesi:
+  - `cublas64_12.dll` / CUDA runtime DLL eksikligi hatalarinda M1 ASR otomatik CPU fallback yapar.
+  - test: `tests/test_asr_fallback.py` guncellendi.
+- ASR fallback davranisi guclendirildi:
+  - Primary ASR denemesi basarisizsa ve fallback ayarlari farkliysa (tipik `cuda -> cpu`) fallback zorunlu denenir.
+  - Generator-iterasyon hatalari da fallback kapsamina alindi (`_transcribe_and_collect`).
+  - Tam test sonucu: `67 passed` (2026-02-19).
 - Uctan uca tek-komut akis eklendi (`run-dub`):
   - `src/video_translate/pipeline/full_run.py`
   - `src/video_translate/cli.py` (`@app.command("run-dub")`)
   - test: `tests/test_full_run_pipeline.py`
+- UI cikti erisimi gelistirildi:
+  - guvenli dosya indirme endpointi eklendi (`GET /download?path=...`)
+  - UI sonucu icin `Cikti klasoru` ve `Indirilebilir Dosyalar` panelleri eklendi
+  - YouTube ve M3 cevap payload'larina `output_dir` + `downloadables` eklendi
+  - testler guncellendi (`tests/test_ui.py`)
+- UI adlandirma standardi temizlendi:
+  - modül: `src/video_translate/ui.py`
+  - CLI: `video-translate ui`
+  - dokuman: `docs/ui.md`
+  - test: `tests/test_ui.py`
+  - `open_project.bat` UI baslatma komutu `ui` olarak guncellendi
+- Adlandirma disiplin karari netlestirildi:
+  - uretim tarafinda `demo/test` adlari kullanilmaz
+  - test kodlari yalnizca `tests/` altinda tutulur
+  - debug artefaktlari ayrik debug alaninda tutulur
 - TTS konfigurasyon blogu eklendi (`[tts]`).
 - TTS config'e `espeak` alanlari eklendi (`espeak_bin/voice/speed/pitch`).
 - Doctor/preflight `espeak` binary kontrolu eklendi.
@@ -100,7 +128,7 @@ Proje v1 (M1->M3) tamamlandi; uctan uca yerel ve API'siz dublaj akislari calisiy
 - M2 milestone dokumani baslatildi.
 - M3 milestone dokumani baslatildi.
 - Temel birim testleri genisletildi ve gecti.
-- Son test sonucu: `63 passed` (2026-02-18).
+- Son test sonucu: `67 passed` (2026-02-19).
 
 ## Calisma Agaci Durumu (Handoff)
 - Commit edilmemis degisiklikler mevcut.
@@ -142,5 +170,6 @@ Proje v1 (M1->M3) tamamlandi; uctan uca yerel ve API'siz dublaj akislari calisiy
 - Tam profesyonel senkron icin QA metrikleri erken asamada zorunlu.
 - Yerel ortamda `yt-dlp` veya `ffmpeg` eksikse pipeline calismaz.
 - ASR model secimi (hiz/dogruluk) cihaza gore farkli davranabilir.
+
 
 

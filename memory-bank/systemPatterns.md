@@ -147,8 +147,8 @@ Pipeline tabanli, moduler, asamali genisletilebilir bir mimari.
 - Cikti:
   - `benchmarks/m3_closure_report.json`
 
-## M3 UI Demo Akisi
-- `cli.ui-demo` -> `ui_demo.run_ui_demo_server`
+## M3 UI Akisi
+- `cli.ui` -> `ui.run_ui_server`
 - Lokal HTTP panel, backend fonksiyonlarini dogrudan cagirir:
   - `pipeline.m1.run_m1_pipeline` (YouTube URL akisinda)
   - `pipeline.m2_prep.prepare_m2_translation_input` (YouTube URL akisinda)
@@ -159,7 +159,11 @@ Pipeline tabanli, moduler, asamali genisletilebilir bir mimari.
 - HTTP endpointler:
   - `POST /run-youtube-dub`: URL tabanli M1->M2->(opsiyonel)M3 zinciri
   - `POST /run-m3`: mevcut run-root uzerinden M3 testi
+  - `GET /download?path=...`: repo ici artefaktlari indirme
 - UI/JSON cevaplarinda `Cache-Control: no-store` kullanilir (tarayici cache kaynakli eski UI gorunumlerini engellemek icin).
+- YouTube ve M3 cevap payload'lari:
+  - `run_root` + `output_dir` + `downloadables` alanlarini tasir
+  - UI bu alanlari kullanarak cikti klasorunu ve indirme linklerini gosterir
 
 ## Windows Startup Akisi
 - `open_project.bat`
@@ -168,7 +172,7 @@ Pipeline tabanli, moduler, asamali genisletilebilir bir mimari.
   - `.venv` olusturma (yoksa)
   - `pip install -e .[dev,m2]` (opsiyonel skip)
   - `video-translate doctor` (profil varsa profil ile)
-  - `video-translate ui-demo` (opsiyonel no-ui)
+  - `video-translate ui` (opsiyonel no-ui)
 
 ## M3 Contract Ozet
 - M3 input stage: `m3_tts_input`
@@ -217,4 +221,5 @@ Pipeline tabanli, moduler, asamali genisletilebilir bir mimari.
 - Birim test: her modulun cekirdek islevleri
 - Entegrasyon test: uctan uca kisa ornek video
 - Regresyon test: ornek veri seti ile kalite metrik karsilastirmasi
+
 

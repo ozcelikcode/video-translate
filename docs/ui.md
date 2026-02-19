@@ -1,6 +1,6 @@
-# UI Demo (M3 + YouTube)
+# UI (M3 + YouTube)
 
-Lokal ve hafif bir test arayuzu eklendi. Bu UI, mevcut backend akisini kullanir:
+Lokal UI arayuzu, mevcut backend akisini kullanir:
 
 - YouTube URL ile `M1 -> prepare-m2 -> run-m2 -> (opsiyonel) prepare-m3 -> run-m3`
 - Hazir run-root uzerinden `prepare-m3` (opsiyonel) + `run-m3`
@@ -8,7 +8,7 @@ Lokal ve hafif bir test arayuzu eklendi. Bu UI, mevcut backend akisini kullanir:
 ## Calistirma
 
 ```bash
-video-translate ui-demo --host 127.0.0.1 --port 8765
+video-translate ui --host 127.0.0.1 --port 8765
 ```
 
 Tarayicida ac:
@@ -17,7 +17,7 @@ Tarayicida ac:
 http://127.0.0.1:8765
 ```
 
-UI uzerinde `UI Build: 2026-02-18-youtube-m3fit` gorunmelidir.
+UI uzerinde `UI Build: 2026-02-19-output-downloads` gorunmelidir.
 Bu metni gormuyorsaniz tarayicida `Ctrl+F5` ile sert yenileme yapin.
 
 ## Notlar
@@ -30,5 +30,8 @@ Bu metni gormuyorsaniz tarayicida `Ctrl+F5` ile sert yenileme yapin.
   - `POST /run-youtube-dub`
 - M3-only endpoint:
   - `POST /run-m3`
+- Dosya indirme endpointi:
+  - `GET /download?path=<repo-ici-dosya-yolu>`
+- UI, her kosu sonunda `Cikti klasoru` ve `Indirilebilir Dosyalar` paneli gosterir.
 - Bu ortamda `espeak` PATH'te degilse, `espeak` profili ile calisma preflight'ta durur.
-- UI demo icin `mock` TTS backend ile akis test edilebilir.
+- `mock` TTS backend ile is akisi dogrulanabilir.

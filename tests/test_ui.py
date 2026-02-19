@@ -2,15 +2,17 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 from video_translate.models import M1Artifacts
 from video_translate.pipeline.m2 import M2Artifacts
 from video_translate.pipeline.m3 import M3Artifacts
 from video_translate.preflight import PreflightReport, ToolCheck
-from video_translate.ui_demo import UIDemoRequest, execute_m3_demo
-from video_translate.ui_demo import UIYoutubeDubRequest, _html_page, execute_youtube_dub_demo
+from video_translate.ui import UIM3Request, execute_m3_run
+from video_translate.ui import UIYoutubeRequest, _html_page, _resolve_download_path, execute_youtube_dub_run
 
 
-def test_execute_m3_demo_runs_prepare_and_m3(tmp_path: Path) -> None:
+def test_execute_m3_run_prepare_and_m3(tmp_path: Path) -> None:
     run_root = tmp_path / "run_ui"
     translation_output = run_root / "output" / "translate" / "translation_output.en-tr.json"
     translation_output.parent.mkdir(parents=True, exist_ok=True)
@@ -44,8 +46,8 @@ def test_execute_m3_demo_runs_prepare_and_m3(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    result = execute_m3_demo(
-        UIDemoRequest(
+    result = execute_m3_run(
+        UIM3Request(
             run_root=run_root,
             config_path=None,
             target_lang="tr",
@@ -62,10 +64,12 @@ def test_execute_m3_demo_runs_prepare_and_m3(tmp_path: Path) -> None:
     assert Path(artifacts["qa_report_json"]).exists()
     assert Path(artifacts["run_manifest_json"]).exists()
     assert Path(artifacts["stitched_preview_wav"]).exists()
+    assert result["output_dir"].endswith("output")
+    assert len(result["downloadables"]) >= 5
     assert isinstance(result["segment_preview"], list)
 
 
-def test_execute_youtube_dub_demo_runs_full_chain(tmp_path: Path, monkeypatch) -> None:
+def test_execute_youtube_dub_run_full_chain(tmp_path: Path, monkeypatch) -> None:
     run_root = tmp_path / "run_full"
     transcript_json = run_root / "output" / "transcript" / "transcript.en.json"
     transcript_json.parent.mkdir(parents=True, exist_ok=True)
@@ -161,17 +165,17 @@ def test_execute_youtube_dub_demo_runs_full_chain(tmp_path: Path, monkeypatch) -
         translate=SimpleNamespace(backend="mock", target_language="tr"),
         tts=SimpleNamespace(backend="mock", espeak_bin="espeak"),
     )
-    monkeypatch.setattr("video_translate.ui_demo.load_config", lambda *_: fake_config)
-    monkeypatch.setattr("video_translate.ui_demo.run_preflight", _fake_preflight)
-    monkeypatch.setattr("video_translate.ui_demo.preflight_errors", lambda *_: [])
-    monkeypatch.setattr("video_translate.ui_demo.run_m1_pipeline", _fake_m1)
-    monkeypatch.setattr("video_translate.ui_demo.prepare_m2_translation_input", _fake_prepare_m2)
-    monkeypatch.setattr("video_translate.ui_demo.run_m2_pipeline", _fake_run_m2)
-    monkeypatch.setattr("video_translate.ui_demo.prepare_m3_tts_input", _fake_prepare_m3)
-    monkeypatch.setattr("video_translate.ui_demo.run_m3_pipeline", _fake_run_m3)
+    monkeypatch.setattr("video_translate.ui.load_config", lambda *_: fake_config)
+    monkeypatch.setattr("video_translate.ui.run_preflight", _fake_preflight)
+    monkeypatch.setattr("video_translate.ui.preflight_errors", lambda *_: [])
+    monkeypatch.setattr("video_translate.ui.run_m1_pipeline", _fake_m1)
+    monkeypatch.setattr("video_translate.ui.prepare_m2_translation_input", _fake_prepare_m2)
+    monkeypatch.setattr("video_translate.ui.run_m2_pipeline", _fake_run_m2)
+    monkeypatch.setattr("video_translate.ui.prepare_m3_tts_input", _fake_prepare_m3)
+    monkeypatch.setattr("video_translate.ui.run_m3_pipeline", _fake_run_m3)
 
-    result = execute_youtube_dub_demo(
-        UIYoutubeDubRequest(
+    result = execute_youtube_dub_run(
+        UIYoutubeRequest(
             source_url="https://www.youtube.com/watch?v=abc123",
             config_path=None,
             workspace_dir=tmp_path,
@@ -184,13 +188,30 @@ def test_execute_youtube_dub_demo_runs_full_chain(tmp_path: Path, monkeypatch) -
 
     assert result["ok"] is True
     assert result["run_root"] == str(run_root)
+    assert result["output_dir"] == str(run_root / "output")
+    assert any(path.endswith("tts_preview_stitched.tr.wav") for path in result["downloadables"])
     assert result["stages"]["m3"] is not None
 
 
 def test_html_page_contains_visible_youtube_controls() -> None:
     html = _html_page()
+    assert "Video Translate Studio" in html
     assert "YouTube URL" in html
     assert "YouTube'dan Dublaj Baslat" in html
-    assert "YouTube Link Ekle" in html
+    assert "Ana Is Akisi" in html
     assert "CLI Kullanim Komutlari" in html
     assert "video-translate run-dub --url" in html
+    assert "Cikti klasoru" in html
+    assert "Indirilebilir Dosyalar" in html
+
+
+def test_resolve_download_path_accepts_project_file() -> None:
+    path = _resolve_download_path("README.md")
+    assert path.name == "README.md"
+
+
+def test_resolve_download_path_rejects_outside_project_root(tmp_path: Path) -> None:
+    outside_file = tmp_path / "outside.txt"
+    outside_file.write_text("blocked", encoding="utf-8")
+    with pytest.raises(ValueError):
+        _resolve_download_path(str(outside_file))

@@ -68,7 +68,7 @@
 - M3 profil finalizasyonu: `finalize-m3-profile`
 - M3 espeak otomatik tuning: `tune-m3-espeak`
 - M3 kapanis otomasyonu: `finish-m3`
-- M3 lokal UI demo: `ui-demo`
+- M3 lokal UI: `ui`
 - M3 backend: `mock` ve `espeak` (yerel, API'siz)
 - M3 backend modulu: `src/video_translate/tts/backends.py`
 - M3 contract modulu: `src/video_translate/tts/contracts.py`
@@ -113,13 +113,17 @@
   - `postfit_trim_segments`
   - `postfit_total_padded_seconds`
   - `postfit_total_trimmed_seconds`
-- UI demo dokumani: `docs/ui-demo.md`
-- UI demo endpointleri:
+- UI dokumani: `docs/ui.md`
+- UI endpointleri:
   - `POST /run-youtube-dub`
   - `POST /run-m3`
-- UI demo cache politikasi:
+  - `GET /download?path=...`
+- UI sonuc panelleri:
+  - `Cikti klasoru` (`output_dir`)
+  - `Indirilebilir Dosyalar` (`downloadables`)
+- UI cache politikasi:
   - HTTP yanitlarinda `Cache-Control: no-store`
-  - build etiketi: `2026-02-18-youtube-m3fit`
+  - build etiketi: `2026-02-19-output-downloads`
 - M3 sure post-fit:
   - kisa kalan segment WAV'lerine sessizlik padding
   - run manifest: `duration_postfit` metrikleri
@@ -127,9 +131,9 @@
 - M3 QA post-fit guard:
   - post-fit segment/sure oranlari esik ustundeyse kalite bayragi uretir
 - Windows startup script: `open_project.bat`
-  - `.venv` olusturma + `pip install -e .[dev,m2]` + `doctor` + `ui-demo`
+  - `.venv` olusturma + `pip install -e .[dev,m2]` + `doctor` + `ui`
   - Opsiyonlar: `--skip-install`, `--no-ui`
-- Son tam test sonucu: `63 passed` (2026-02-18)
+- Son tam test sonucu: `67 passed` (2026-02-19)
 
 ## Handoff Teknik Notlari
 - M3 icin harici API kullanilmiyor; mevcut backend tamamen yerel dosya uretimi yapiyor.
@@ -141,4 +145,5 @@
   - `tests/test_m3_prep.py`
   - `tests/test_m3_pipeline.py`
   - `tests/test_m3_qa_report.py`
+
 

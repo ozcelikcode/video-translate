@@ -18,7 +18,7 @@ from video_translate.pipeline.m3_espeak_tune import run_m3_espeak_tuning_automat
 from video_translate.pipeline.m3_prep import prepare_m3_tts_input
 from video_translate.pipeline.m3_tuning_report import build_m3_tuning_report_markdown
 from video_translate.preflight import preflight_errors, run_preflight
-from video_translate.ui_demo import run_ui_demo_server
+from video_translate.ui import run_ui_server
 from video_translate.utils.subprocess_utils import CommandExecutionError
 
 app = typer.Typer(add_completion=False, no_args_is_help=True)
@@ -784,14 +784,14 @@ def finish_m3(
     typer.echo(f"M3 closure report: {artifacts.closure_report_json}")
 
 
-@app.command("ui-demo")
-def ui_demo(
-    host: str = typer.Option("127.0.0.1", "--host", help="Bind address for local demo UI."),
-    port: int = typer.Option(8765, "--port", help="Bind port for local demo UI."),
+@app.command("ui")
+def ui(
+    host: str = typer.Option("127.0.0.1", "--host", help="Bind address for local UI."),
+    port: int = typer.Option(8765, "--port", help="Bind port for local UI."),
 ) -> None:
-    """Run lightweight local UI demo for M3 workflow testing."""
-    typer.echo(f"M3 UI demo starting at: http://{host}:{port}")
-    run_ui_demo_server(host, port)
+    """Run local UI for end-to-end dubbing workflow operations."""
+    typer.echo(f"Video Translate UI starting at: http://{host}:{port}")
+    run_ui_server(host, port)
 
 
 def main() -> None:

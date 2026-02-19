@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import json
+import mimetypes
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qs
+from urllib.parse import parse_qs, quote, urlparse
 
 from video_translate.config import load_config
 from video_translate.models import M1Artifacts
@@ -16,11 +17,12 @@ from video_translate.pipeline.m3 import run_m3_pipeline
 from video_translate.pipeline.m3_prep import prepare_m3_tts_input
 from video_translate.preflight import preflight_errors, run_preflight
 
-UI_DEMO_VERSION = "2026-02-18-youtube-m3fit-run-dub-help"
+UI_VERSION = "2026-02-19-output-downloads"
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
 @dataclass(frozen=True)
-class UIDemoRequest:
+class UIM3Request:
     run_root: Path
     config_path: Path | None
     target_lang: str
@@ -30,7 +32,7 @@ class UIDemoRequest:
 
 
 @dataclass(frozen=True)
-class UIYoutubeDubRequest:
+class UIYoutubeRequest:
     source_url: str
     config_path: Path | None
     workspace_dir: Path | None
@@ -47,10 +49,49 @@ def _read_json(path: Path) -> dict[str, Any]:
     return payload
 
 
-def execute_m3_demo(request: UIDemoRequest) -> dict[str, Any]:
+def _to_ui_path(path: Path) -> str:
+    resolved = path.resolve()
+    try:
+        return str(resolved.relative_to(PROJECT_ROOT))
+    except ValueError:
+        return str(resolved)
+
+
+def _collect_downloadables(paths: list[Path | None]) -> list[str]:
+    seen: set[str] = set()
+    items: list[str] = []
+    for path in paths:
+        if path is None:
+            continue
+        resolved = path.resolve()
+        if not resolved.exists() or not resolved.is_file():
+            continue
+        normalized = _to_ui_path(resolved)
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        items.append(normalized)
+    return items
+
+
+def _resolve_download_path(raw_path: str) -> Path:
+    candidate = raw_path.strip()
+    if not candidate:
+        raise ValueError("path is required.")
+    requested = Path(candidate)
+    resolved = requested.resolve() if requested.is_absolute() else (PROJECT_ROOT / requested).resolve()
+    if PROJECT_ROOT != resolved and PROJECT_ROOT not in resolved.parents:
+        raise ValueError("path must stay under project root.")
+    if not resolved.exists() or not resolved.is_file():
+        raise FileNotFoundError(f"Download file not found: {resolved}")
+    return resolved
+
+
+def execute_m3_run(request: UIM3Request) -> dict[str, Any]:
     run_root = request.run_root
     if not run_root.exists():
         raise FileNotFoundError(f"Run root not found: {run_root}")
+    resolved_run_root = run_root.resolve()
 
     config = load_config(request.config_path)
     target_lang = request.target_lang.strip() or "tr"
@@ -94,23 +135,34 @@ def execute_m3_demo(request: UIDemoRequest) -> dict[str, Any]:
                     }
                 )
 
+    artifacts_payload = {
+        "tts_input_json": _to_ui_path(artifacts.tts_input_json),
+        "tts_output_json": _to_ui_path(artifacts.tts_output_json),
+        "qa_report_json": _to_ui_path(artifacts.qa_report_json),
+        "run_manifest_json": _to_ui_path(artifacts.run_manifest_json),
+        "stitched_preview_wav": _to_ui_path(artifacts.stitched_preview_wav),
+    }
     return {
         "ok": True,
-        "run_root": str(run_root),
+        "run_root": _to_ui_path(resolved_run_root),
+        "output_dir": _to_ui_path(resolved_run_root / "output"),
         "target_lang": target_lang,
-        "artifacts": {
-            "tts_input_json": str(artifacts.tts_input_json),
-            "tts_output_json": str(artifacts.tts_output_json),
-            "qa_report_json": str(artifacts.qa_report_json),
-            "run_manifest_json": str(artifacts.run_manifest_json),
-            "stitched_preview_wav": str(artifacts.stitched_preview_wav),
-        },
+        "artifacts": artifacts_payload,
+        "downloadables": _collect_downloadables(
+            [
+                artifacts.tts_input_json,
+                artifacts.tts_output_json,
+                artifacts.qa_report_json,
+                artifacts.run_manifest_json,
+                artifacts.stitched_preview_wav,
+            ]
+        ),
         "qa": qa_report,
         "segment_preview": preview_segments,
     }
 
 
-def execute_youtube_dub_demo(request: UIYoutubeDubRequest) -> dict[str, Any]:
+def execute_youtube_dub_run(request: UIYoutubeRequest) -> dict[str, Any]:
     source_url = request.source_url.strip()
     if not source_url:
         raise ValueError("source_url is required.")
@@ -157,7 +209,14 @@ def execute_youtube_dub_demo(request: UIYoutubeDubRequest) -> dict[str, Any]:
         target_language_override=target_lang,
     )
 
+    m2_payload = {
+        "translation_input_json": _to_ui_path(m2_artifacts.translation_input_json),
+        "translation_output_json": _to_ui_path(m2_artifacts.translation_output_json),
+        "qa_report_json": _to_ui_path(m2_artifacts.qa_report_json),
+        "run_manifest_json": _to_ui_path(m2_artifacts.run_manifest_json),
+    }
     m3_payload: dict[str, Any] | None = None
+    m3_downloadables: list[Path | None] = []
     if request.run_m3:
         m3_input = run_root / "output" / "tts" / f"tts_input.{target_lang}.json"
         prepare_m3_tts_input(
@@ -176,26 +235,44 @@ def execute_youtube_dub_demo(request: UIYoutubeDubRequest) -> dict[str, Any]:
             config=config,
         )
         m3_payload = {
-            "tts_input_json": str(m3_artifacts.tts_input_json),
-            "tts_output_json": str(m3_artifacts.tts_output_json),
-            "qa_report_json": str(m3_artifacts.qa_report_json),
-            "run_manifest_json": str(m3_artifacts.run_manifest_json),
-            "stitched_preview_wav": str(m3_artifacts.stitched_preview_wav),
+            "tts_input_json": _to_ui_path(m3_artifacts.tts_input_json),
+            "tts_output_json": _to_ui_path(m3_artifacts.tts_output_json),
+            "qa_report_json": _to_ui_path(m3_artifacts.qa_report_json),
+            "run_manifest_json": _to_ui_path(m3_artifacts.run_manifest_json),
+            "stitched_preview_wav": _to_ui_path(m3_artifacts.stitched_preview_wav),
         }
+        m3_downloadables = [
+            m3_artifacts.tts_input_json,
+            m3_artifacts.tts_output_json,
+            m3_artifacts.qa_report_json,
+            m3_artifacts.run_manifest_json,
+            m3_artifacts.stitched_preview_wav,
+        ]
 
     result: dict[str, Any] = {
         "ok": True,
         "source_url": source_url,
-        "run_root": str(run_root),
+        "run_root": _to_ui_path(run_root),
+        "output_dir": _to_ui_path(run_root / "output"),
         "target_lang": target_lang,
+        "downloadables": _collect_downloadables(
+            [
+                m1_artifacts.source_media,
+                m1_artifacts.normalized_audio,
+                m1_artifacts.transcript_json,
+                m1_artifacts.transcript_srt,
+                m1_artifacts.qa_report,
+                m1_artifacts.run_manifest,
+                m2_artifacts.translation_input_json,
+                m2_artifacts.translation_output_json,
+                m2_artifacts.qa_report_json,
+                m2_artifacts.run_manifest_json,
+                *m3_downloadables,
+            ]
+        ),
         "stages": {
             "m1": _m1_payload(m1_artifacts),
-            "m2": {
-                "translation_input_json": str(m2_artifacts.translation_input_json),
-                "translation_output_json": str(m2_artifacts.translation_output_json),
-                "qa_report_json": str(m2_artifacts.qa_report_json),
-                "run_manifest_json": str(m2_artifacts.run_manifest_json),
-            },
+            "m2": m2_payload,
             "m3": m3_payload,
         },
     }
@@ -204,22 +281,22 @@ def execute_youtube_dub_demo(request: UIYoutubeDubRequest) -> dict[str, Any]:
 
 def _m1_payload(artifacts: M1Artifacts) -> dict[str, Any]:
     return {
-        "source_media": str(artifacts.source_media),
-        "normalized_audio": str(artifacts.normalized_audio),
-        "transcript_json": str(artifacts.transcript_json),
-        "transcript_srt": str(artifacts.transcript_srt) if artifacts.transcript_srt else None,
-        "qa_report_json": str(artifacts.qa_report),
-        "run_manifest_json": str(artifacts.run_manifest),
+        "source_media": _to_ui_path(artifacts.source_media),
+        "normalized_audio": _to_ui_path(artifacts.normalized_audio),
+        "transcript_json": _to_ui_path(artifacts.transcript_json),
+        "transcript_srt": _to_ui_path(artifacts.transcript_srt) if artifacts.transcript_srt else None,
+        "qa_report_json": _to_ui_path(artifacts.qa_report),
+        "run_manifest_json": _to_ui_path(artifacts.run_manifest),
     }
 
 
 def _html_page() -> str:
-    return """<!doctype html>
+    html = """<!doctype html>
 <html lang="tr">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Video Translate M3 UI Demo</title>
+  <title>Video Translate Studio</title>
   <style>
     :root {
       --bg: #f7f4ee;
@@ -326,16 +403,28 @@ def _html_page() -> str:
       line-height: 1.45;
     }
     .err { color: var(--warn); }
+    .downloads {
+      margin: 0;
+      padding-left: 18px;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+    .downloads li { margin: 2px 0; }
+    .downloads a {
+      color: var(--brand);
+      text-decoration: none;
+    }
+    .downloads a:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
   <div class="wrap">
     <div class="hero">
-      <h1>M3 UI Demo</h1>
-      <p><strong>UI Build:</strong> 2026-02-18-youtube-m3fit</p>
-      <p>Bu panel mevcut backend akislarini tek yerden test etmek icindir.</p>
+      <h1>Video Translate Studio</h1>
+      <p><strong>UI Build:</strong> __UI_BUILD__</p>
+      <p>YouTube linkinden dogrudan EN->TR dublaj uretimi icin ana operasyon ekrani.</p>
       <div class="focus">
-        <strong>YouTube Link Ekle:</strong> Asagidaki `YouTube URL` alanina linki yapistir ve
+        <strong>Ana Is Akisi:</strong> Asagidaki `YouTube URL` alanina linki yapistir ve
         `YouTube'dan Dublaj Baslat` butonuna bas.
       </div>
       <div class="panel">
@@ -378,8 +467,13 @@ video-translate run-dub --url "https://www.youtube.com/watch?v=VIDEO_ID" --confi
       </div>
       <div class="panel"><pre id="ytStatus">Hazir.</pre></div>
       <div class="panel"><pre id="ytOutput"></pre></div>
+      <div class="panel"><pre id="ytOutputDir">Cikti klasoru: -</pre></div>
+      <div class="panel">
+        <label>Indirilebilir Dosyalar</label>
+        <ul id="ytDownloads" class="downloads"></ul>
+      </div>
       <hr style="border:0;border-top:1px solid var(--line);margin:14px 0;" />
-      <p>M3 only (hazir bir run-root uzerinden) test paneli:</p>
+      <p>Gelişmis M3 araci (opsiyonel, mevcut run-root uzerinden):</p>
       <div class="grid">
         <div class="field">
           <label>Run Root</label>
@@ -404,11 +498,16 @@ video-translate run-dub --url "https://www.youtube.com/watch?v=VIDEO_ID" --confi
       </div>
       <label class="check"><input id="prepareInput" type="checkbox" checked /> once prepare-m3 calistir</label>
       <div class="actions">
-        <button id="runBtn">M3 Calistir</button>
+        <button id="runBtn">M3 Aracini Calistir</button>
         <button id="clearBtn" class="secondary">Temizle</button>
       </div>
       <div class="panel"><pre id="status">Hazir.</pre></div>
       <div class="panel"><pre id="output"></pre></div>
+      <div class="panel"><pre id="m3OutputDir">Cikti klasoru: -</pre></div>
+      <div class="panel">
+        <label>Indirilebilir Dosyalar</label>
+        <ul id="m3Downloads" class="downloads"></ul>
+      </div>
     </div>
   </div>
   <script>
@@ -417,14 +516,57 @@ video-translate run-dub --url "https://www.youtube.com/watch?v=VIDEO_ID" --confi
     const runBtn = document.getElementById("runBtn");
     const ytStatusEl = document.getElementById("ytStatus");
     const ytOutputEl = document.getElementById("ytOutput");
+    const ytOutputDirEl = document.getElementById("ytOutputDir");
+    const ytDownloadsEl = document.getElementById("ytDownloads");
+    const m3OutputDirEl = document.getElementById("m3OutputDir");
+    const m3DownloadsEl = document.getElementById("m3Downloads");
     const youtubeRunBtn = document.getElementById("youtubeRunBtn");
-    document.getElementById("clearBtn").addEventListener("click", () => {
+    const clearBtn = document.getElementById("clearBtn");
+    function renderOutputDir(element, payload) {
+      if (payload && payload.output_dir) {
+        element.textContent = "Cikti klasoru: " + payload.output_dir;
+        return;
+      }
+      if (payload && payload.run_root) {
+        element.textContent = "Cikti klasoru: " + payload.run_root + "/output";
+        return;
+      }
+      element.textContent = "Cikti klasoru: -";
+    }
+    function clearDownloadList(listEl) {
+      listEl.innerHTML = "";
+    }
+    function renderDownloadList(listEl, files) {
+      clearDownloadList(listEl);
+      if (!Array.isArray(files) || files.length === 0) {
+        const empty = document.createElement("li");
+        empty.textContent = "Henuz dosya yok.";
+        listEl.appendChild(empty);
+        return;
+      }
+      files.forEach((filePath) => {
+        const item = document.createElement("li");
+        const link = document.createElement("a");
+        link.href = "/download?path=" + encodeURIComponent(filePath);
+        link.textContent = filePath;
+        link.setAttribute("download", "");
+        item.appendChild(link);
+        listEl.appendChild(item);
+      });
+    }
+    renderDownloadList(ytDownloadsEl, []);
+    renderDownloadList(m3DownloadsEl, []);
+    clearBtn.addEventListener("click", () => {
       statusEl.textContent = "Temizlendi.";
       statusEl.classList.remove("err");
       outputEl.textContent = "";
+      renderOutputDir(m3OutputDirEl, null);
+      renderDownloadList(m3DownloadsEl, []);
       ytStatusEl.textContent = "Temizlendi.";
       ytStatusEl.classList.remove("err");
       ytOutputEl.textContent = "";
+      renderOutputDir(ytOutputDirEl, null);
+      renderDownloadList(ytDownloadsEl, []);
     });
     youtubeRunBtn.addEventListener("click", async () => {
       const body = new URLSearchParams();
@@ -438,6 +580,8 @@ video-translate run-dub --url "https://www.youtube.com/watch?v=VIDEO_ID" --confi
       ytStatusEl.textContent = "YouTube akisi calisiyor...";
       ytStatusEl.classList.remove("err");
       ytOutputEl.textContent = "";
+      renderOutputDir(ytOutputDirEl, null);
+      clearDownloadList(ytDownloadsEl);
       youtubeRunBtn.disabled = true;
       try {
         const res = await fetch("/run-youtube-dub", { method: "POST", body });
@@ -447,6 +591,8 @@ video-translate run-dub --url "https://www.youtube.com/watch?v=VIDEO_ID" --confi
         }
         ytStatusEl.textContent = "YouTube akisi basarili.";
         ytOutputEl.textContent = JSON.stringify(payload, null, 2);
+        renderOutputDir(ytOutputDirEl, payload);
+        renderDownloadList(ytDownloadsEl, payload.downloadables);
         if (payload.run_root) {
           document.getElementById("runRoot").value = payload.run_root;
         }
@@ -454,6 +600,8 @@ video-translate run-dub --url "https://www.youtube.com/watch?v=VIDEO_ID" --confi
         ytStatusEl.textContent = "YouTube akisinda hata olustu.";
         ytStatusEl.classList.add("err");
         ytOutputEl.textContent = String(err);
+        renderOutputDir(ytOutputDirEl, null);
+        renderDownloadList(ytDownloadsEl, []);
       } finally {
         youtubeRunBtn.disabled = false;
       }
@@ -469,6 +617,8 @@ video-translate run-dub --url "https://www.youtube.com/watch?v=VIDEO_ID" --confi
       statusEl.textContent = "Calisiyor...";
       statusEl.classList.remove("err");
       outputEl.textContent = "";
+      renderOutputDir(m3OutputDirEl, null);
+      clearDownloadList(m3DownloadsEl);
       runBtn.disabled = true;
       try {
         const res = await fetch("/run-m3", { method: "POST", body });
@@ -478,10 +628,14 @@ video-translate run-dub --url "https://www.youtube.com/watch?v=VIDEO_ID" --confi
         }
         statusEl.textContent = "Basarili.";
         outputEl.textContent = JSON.stringify(payload, null, 2);
+        renderOutputDir(m3OutputDirEl, payload);
+        renderDownloadList(m3DownloadsEl, payload.downloadables);
       } catch (err) {
         statusEl.textContent = "Hata olustu.";
         statusEl.classList.add("err");
         outputEl.textContent = String(err);
+        renderOutputDir(m3OutputDirEl, null);
+        renderDownloadList(m3DownloadsEl, []);
       } finally {
         runBtn.disabled = false;
       }
@@ -489,12 +643,23 @@ video-translate run-dub --url "https://www.youtube.com/watch?v=VIDEO_ID" --confi
   </script>
 </body>
 </html>"""
+    return html.replace("__UI_BUILD__", UI_VERSION)
 
 
 def _build_handler() -> type[BaseHTTPRequestHandler]:
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self) -> None:  # noqa: N802
-            if self.path != "/":
+            request_url = urlparse(self.path)
+            if request_url.path == "/download":
+                form = parse_qs(request_url.query)
+                try:
+                    download_path = _resolve_download_path(_pick(form, "path", ""))
+                except Exception as exc:  # noqa: BLE001
+                    self._send_json(400, {"ok": False, "error": str(exc)})
+                    return
+                self._send_file(download_path)
+                return
+            if request_url.path != "/":
                 self._send_json(404, {"ok": False, "error": "Not found"})
                 return
             encoded = _html_page().encode("utf-8")
@@ -516,7 +681,7 @@ def _build_handler() -> type[BaseHTTPRequestHandler]:
             form = parse_qs(body)
             try:
                 if self.path == "/run-m3":
-                    request = UIDemoRequest(
+                    request = UIM3Request(
                         run_root=Path(_pick(form, "run_root", "runs/finalize_m1m2/m1_real_medium_cpu")),
                         config_path=_as_opt_path(form, "config_path"),
                         target_lang=_pick(form, "target_lang", "tr"),
@@ -524,9 +689,9 @@ def _build_handler() -> type[BaseHTTPRequestHandler]:
                         translation_output_json=_as_opt_path(form, "translation_output_json"),
                         tts_input_json=_as_opt_path(form, "tts_input_json"),
                     )
-                    result = execute_m3_demo(request)
+                    result = execute_m3_run(request)
                 else:
-                    request = UIYoutubeDubRequest(
+                    request = UIYoutubeRequest(
                         source_url=_pick(form, "source_url", ""),
                         config_path=_as_opt_path(form, "config_path"),
                         workspace_dir=_as_opt_path(form, "workspace_dir"),
@@ -535,7 +700,7 @@ def _build_handler() -> type[BaseHTTPRequestHandler]:
                         target_lang=_pick(form, "target_lang", "tr"),
                         run_m3=_pick(form, "run_m3", "1") == "1",
                     )
-                    result = execute_youtube_dub_demo(request)
+                    result = execute_youtube_dub_run(request)
             except Exception as exc:  # noqa: BLE001
                 self._send_json(400, {"ok": False, "error": str(exc)})
                 return
@@ -554,6 +719,28 @@ def _build_handler() -> type[BaseHTTPRequestHandler]:
             self.send_header("Content-Length", str(len(encoded)))
             self.end_headers()
             self.wfile.write(encoded)
+
+        def _send_file(self, path: Path) -> None:
+            safe_filename = path.name.replace('"', "")
+            encoded_filename = quote(path.name)
+            content_type, _ = mimetypes.guess_type(path.name)
+            self.send_response(200)
+            self.send_header("Content-Type", content_type or "application/octet-stream")
+            self.send_header(
+                "Content-Disposition",
+                f"attachment; filename=\"{safe_filename}\"; filename*=UTF-8''{encoded_filename}",
+            )
+            self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+            self.send_header("Pragma", "no-cache")
+            self.send_header("Expires", "0")
+            self.send_header("Content-Length", str(path.stat().st_size))
+            self.end_headers()
+            with path.open("rb") as file_handle:
+                while True:
+                    chunk = file_handle.read(64 * 1024)
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
 
     return Handler
 
@@ -582,7 +769,7 @@ def _as_opt_text(form: dict[str, list[str]], key: str) -> str | None:
     return value if value else None
 
 
-def run_ui_demo_server(host: str, port: int) -> None:
+def run_ui_server(host: str, port: int) -> None:
     server = ThreadingHTTPServer((host, port), _build_handler())
     try:
         server.serve_forever(poll_interval=0.2)
