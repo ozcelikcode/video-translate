@@ -69,6 +69,7 @@
 - M3 espeak otomatik tuning: `tune-m3-espeak`
 - M3 kapanis otomasyonu: `finish-m3`
 - M3 lokal UI: `ui`
+- Final teslim modulu: `pipeline/delivery.py`
 - M3 backend: `mock` ve `espeak` (yerel, API'siz)
 - M3 backend modulu: `src/video_translate/tts/backends.py`
 - M3 contract modulu: `src/video_translate/tts/contracts.py`
@@ -123,7 +124,11 @@
   - `Indirilebilir Dosyalar` (`downloadables`)
 - UI cache politikasi:
   - HTTP yanitlarinda `Cache-Control: no-store`
-  - build etiketi: `2026-02-19-output-downloads`
+  - build etiketi: `2026-02-20-final-mp4-downloads`
+- UI YouTube teslim davranisi:
+  - final MP4 cikti: `downloads/<run_id>/video_dubbed.tr.mp4`
+  - kalite ozeti: `downloads/<run_id>/quality_summary.tr.json`
+  - varsayilan ara dosya temizligi: acik
 - M3 sure post-fit:
   - kisa kalan segment WAV'lerine sessizlik padding
   - run manifest: `duration_postfit` metrikleri
@@ -133,7 +138,7 @@
 - Windows startup script: `open_project.bat`
   - `.venv` olusturma + `pip install -e .[dev,m2]` + `doctor` + `ui`
   - Opsiyonlar: `--skip-install`, `--no-ui`
-- Son tam test sonucu: `67 passed` (2026-02-19)
+- Son tam test sonucu: `70 passed` (2026-02-20)
 
 ## Handoff Teknik Notlari
 - M3 icin harici API kullanilmiyor; mevcut backend tamamen yerel dosya uretimi yapiyor.

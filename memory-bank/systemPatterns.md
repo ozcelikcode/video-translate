@@ -165,6 +165,20 @@ Pipeline tabanli, moduler, asamali genisletilebilir bir mimari.
   - `run_root` + `output_dir` + `downloadables` alanlarini tasir
   - UI bu alanlari kullanarak cikti klasorunu ve indirme linklerini gosterir
 
+## Final Teslim Akisi
+- `pipeline.delivery.deliver_final_video`
+- Zincir:
+  - kaynak video (`M1 source_media`) + stitched TTS audio (`M3 stitched_preview_wav`)
+  - ffmpeg ile final MP4 render (`libx264` + `aac`)
+  - kalite ozeti yazimi (`quality_summary.<lang>.json`)
+  - opsiyonel ara dosya temizligi (`cleanup_run_workspace`)
+- Cikti:
+  - `downloads/<run_id>/video_dubbed.<lang>.mp4`
+  - `downloads/<run_id>/quality_summary.<lang>.json`
+- UI YouTube endpointi final teslim odakli calisir:
+  - `downloadables` yalniz final MP4 listeler
+  - `output_dir` `downloads/<run_id>` olarak doner
+
 ## Windows Startup Akisi
 - `open_project.bat`
 - Sirali akil:

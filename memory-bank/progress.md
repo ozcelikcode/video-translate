@@ -69,7 +69,7 @@ Proje v1 (M1->M3) tamamlandi; uctan uca yerel ve API'siz dublaj akislari calisiy
 - UI icin YouTube URL entegrasyonu eklendi (`POST /run-youtube-dub`).
 - UI'da URL tabanli M1->M2->(opsiyonel)M3 zinciri aktif.
 - UI cache sorunu icin no-cache HTTP basliklari eklendi.
-- UI icinde build etiketi eklendi (`2026-02-19-output-downloads`).
+- UI icinde build etiketi eklendi (`2026-02-20-final-mp4-downloads`).
 - M3 sure post-fit eklendi: kisa segmentlere sessizlik padding.
 - M3 manifest'e `duration_postfit` metrikleri eklendi.
 - M3 sure post-fit genisletildi: uzun segmentlere WAV trim eklendi.
@@ -100,7 +100,7 @@ Proje v1 (M1->M3) tamamlandi; uctan uca yerel ve API'siz dublaj akislari calisiy
 - ASR fallback davranisi guclendirildi:
   - Primary ASR denemesi basarisizsa ve fallback ayarlari farkliysa (tipik `cuda -> cpu`) fallback zorunlu denenir.
   - Generator-iterasyon hatalari da fallback kapsamina alindi (`_transcribe_and_collect`).
-  - Tam test sonucu: `67 passed` (2026-02-19).
+  - Tam test sonucu: `70 passed` (2026-02-20).
 - Uctan uca tek-komut akis eklendi (`run-dub`):
   - `src/video_translate/pipeline/full_run.py`
   - `src/video_translate/cli.py` (`@app.command("run-dub")`)
@@ -116,6 +116,13 @@ Proje v1 (M1->M3) tamamlandi; uctan uca yerel ve API'siz dublaj akislari calisiy
   - dokuman: `docs/ui.md`
   - test: `tests/test_ui.py`
   - `open_project.bat` UI baslatma komutu `ui` olarak guncellendi
+- Final teslim odakli YouTube UI akisi eklendi:
+  - yeni pipeline: `src/video_translate/pipeline/delivery.py`
+  - final cikti: `downloads/<run_id>/video_dubbed.tr.mp4`
+  - kalite ozeti: `downloads/<run_id>/quality_summary.tr.json`
+  - UI indirilebilir dosyalar listesi final MP4 ile sinirlandi
+  - ara dosya temizligi varsayilan acik (`cleanup_intermediate=true`)
+  - testler: `tests/test_delivery.py`, `tests/test_ui.py`
 - Adlandirma disiplin karari netlestirildi:
   - uretim tarafinda `demo/test` adlari kullanilmaz
   - test kodlari yalnizca `tests/` altinda tutulur
@@ -128,7 +135,7 @@ Proje v1 (M1->M3) tamamlandi; uctan uca yerel ve API'siz dublaj akislari calisiy
 - M2 milestone dokumani baslatildi.
 - M3 milestone dokumani baslatildi.
 - Temel birim testleri genisletildi ve gecti.
-- Son test sonucu: `67 passed` (2026-02-19).
+- Son test sonucu: `70 passed` (2026-02-20).
 
 ## Calisma Agaci Durumu (Handoff)
 - Commit edilmemis degisiklikler mevcut.

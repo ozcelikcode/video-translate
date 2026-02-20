@@ -9,7 +9,7 @@ from typing import Any
 from urllib.parse import parse_qs, quote, urlparse
 
 from video_translate.config import load_config
-from video_translate.models import M1Artifacts
+from video_translate.pipeline.delivery import deliver_final_video
 from video_translate.pipeline.m1 import run_m1_pipeline
 from video_translate.pipeline.m2 import run_m2_pipeline
 from video_translate.pipeline.m2_prep import prepare_m2_translation_input
@@ -17,7 +17,7 @@ from video_translate.pipeline.m3 import run_m3_pipeline
 from video_translate.pipeline.m3_prep import prepare_m3_tts_input
 from video_translate.preflight import preflight_errors, run_preflight
 
-UI_VERSION = "2026-02-19-output-downloads"
+UI_VERSION = "2026-02-20-final-mp4-downloads"
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -36,10 +36,12 @@ class UIYoutubeRequest:
     source_url: str
     config_path: Path | None
     workspace_dir: Path | None
+    downloads_dir: Path | None
     run_id: str | None
     emit_srt: bool
     target_lang: str
     run_m3: bool
+    cleanup_intermediate: bool = True
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -166,6 +168,8 @@ def execute_youtube_dub_run(request: UIYoutubeRequest) -> dict[str, Any]:
     source_url = request.source_url.strip()
     if not source_url:
         raise ValueError("source_url is required.")
+    if not request.run_m3:
+        raise ValueError("M3 must stay enabled for final Turkish MP4 output.")
 
     config = load_config(request.config_path)
     target_lang = request.target_lang.strip() or config.translate.target_language
@@ -210,84 +214,64 @@ def execute_youtube_dub_run(request: UIYoutubeRequest) -> dict[str, Any]:
     )
 
     m2_payload = {
-        "translation_input_json": _to_ui_path(m2_artifacts.translation_input_json),
-        "translation_output_json": _to_ui_path(m2_artifacts.translation_output_json),
         "qa_report_json": _to_ui_path(m2_artifacts.qa_report_json),
         "run_manifest_json": _to_ui_path(m2_artifacts.run_manifest_json),
     }
-    m3_payload: dict[str, Any] | None = None
-    m3_downloadables: list[Path | None] = []
-    if request.run_m3:
-        m3_input = run_root / "output" / "tts" / f"tts_input.{target_lang}.json"
-        prepare_m3_tts_input(
-            translation_output_json_path=m2_artifacts.translation_output_json,
-            output_json_path=m3_input,
-            target_language=target_lang,
-        )
-        m3_output = run_root / "output" / "tts" / f"tts_output.{target_lang}.json"
-        m3_qa = run_root / "output" / "qa" / "m3_qa_report.json"
-        m3_manifest = run_root / "run_m3_manifest.json"
-        m3_artifacts = run_m3_pipeline(
-            tts_input_json_path=m3_input,
-            output_json_path=m3_output,
-            qa_report_json_path=m3_qa,
-            run_manifest_json_path=m3_manifest,
-            config=config,
-        )
-        m3_payload = {
-            "tts_input_json": _to_ui_path(m3_artifacts.tts_input_json),
-            "tts_output_json": _to_ui_path(m3_artifacts.tts_output_json),
-            "qa_report_json": _to_ui_path(m3_artifacts.qa_report_json),
-            "run_manifest_json": _to_ui_path(m3_artifacts.run_manifest_json),
-            "stitched_preview_wav": _to_ui_path(m3_artifacts.stitched_preview_wav),
-        }
-        m3_downloadables = [
-            m3_artifacts.tts_input_json,
-            m3_artifacts.tts_output_json,
-            m3_artifacts.qa_report_json,
-            m3_artifacts.run_manifest_json,
-            m3_artifacts.stitched_preview_wav,
-        ]
+    m3_input = run_root / "output" / "tts" / f"tts_input.{target_lang}.json"
+    prepare_m3_tts_input(
+        translation_output_json_path=m2_artifacts.translation_output_json,
+        output_json_path=m3_input,
+        target_language=target_lang,
+    )
+    m3_output = run_root / "output" / "tts" / f"tts_output.{target_lang}.json"
+    m3_qa = run_root / "output" / "qa" / "m3_qa_report.json"
+    m3_manifest = run_root / "run_m3_manifest.json"
+    m3_artifacts = run_m3_pipeline(
+        tts_input_json_path=m3_input,
+        output_json_path=m3_output,
+        qa_report_json_path=m3_qa,
+        run_manifest_json_path=m3_manifest,
+        config=config,
+    )
+
+    selected_downloads_dir = request.downloads_dir or Path("downloads")
+    delivery = deliver_final_video(
+        run_root=run_root,
+        source_video=m1_artifacts.source_media,
+        dubbed_audio=m3_artifacts.stitched_preview_wav,
+        ffmpeg_bin=config.tools.ffmpeg,
+        target_lang=target_lang,
+        downloads_root=selected_downloads_dir,
+        cleanup_intermediate=request.cleanup_intermediate,
+    )
+
+    m3_payload: dict[str, Any] = {
+        "qa_report_json": _to_ui_path(m3_artifacts.qa_report_json),
+        "run_manifest_json": _to_ui_path(m3_artifacts.run_manifest_json),
+        "cleanup_intermediate": request.cleanup_intermediate,
+    }
+    delivery_payload = {
+        "downloads_dir": _to_ui_path(delivery.downloads_dir),
+        "dubbed_video_mp4": _to_ui_path(delivery.dubbed_video_mp4),
+        "quality_summary_json": _to_ui_path(delivery.quality_summary_json),
+        "cleanup_performed": delivery.cleanup_performed,
+    }
 
     result: dict[str, Any] = {
         "ok": True,
         "source_url": source_url,
         "run_root": _to_ui_path(run_root),
-        "output_dir": _to_ui_path(run_root / "output"),
+        "output_dir": _to_ui_path(delivery.downloads_dir),
         "target_lang": target_lang,
-        "downloadables": _collect_downloadables(
-            [
-                m1_artifacts.source_media,
-                m1_artifacts.normalized_audio,
-                m1_artifacts.transcript_json,
-                m1_artifacts.transcript_srt,
-                m1_artifacts.qa_report,
-                m1_artifacts.run_manifest,
-                m2_artifacts.translation_input_json,
-                m2_artifacts.translation_output_json,
-                m2_artifacts.qa_report_json,
-                m2_artifacts.run_manifest_json,
-                *m3_downloadables,
-            ]
-        ),
+        "downloadables": _collect_downloadables([delivery.dubbed_video_mp4]),
         "stages": {
-            "m1": _m1_payload(m1_artifacts),
+            "m1": {"qa_report_json": _to_ui_path(m1_artifacts.qa_report)},
             "m2": m2_payload,
             "m3": m3_payload,
+            "delivery": delivery_payload,
         },
     }
     return result
-
-
-def _m1_payload(artifacts: M1Artifacts) -> dict[str, Any]:
-    return {
-        "source_media": _to_ui_path(artifacts.source_media),
-        "normalized_audio": _to_ui_path(artifacts.normalized_audio),
-        "transcript_json": _to_ui_path(artifacts.transcript_json),
-        "transcript_srt": _to_ui_path(artifacts.transcript_srt) if artifacts.transcript_srt else None,
-        "qa_report_json": _to_ui_path(artifacts.qa_report),
-        "run_manifest_json": _to_ui_path(artifacts.run_manifest),
-    }
 
 
 def _html_page() -> str:
@@ -431,8 +415,9 @@ def _html_page() -> str:
         <pre>
 YouTube Dub Akisi:
 1) URL gir
-2) M1 + M2 calisir
-3) Opsiyonel M3 ile TTS dublaj uretilir
+2) M1 + M2 + M3 calisir
+3) Final TR dublajli MP4 `downloads/` altina uretilir
+4) Ara dosyalar (cache/gecici) temizlenir
         </pre>
       </div>
       <div class="panel">
@@ -459,9 +444,14 @@ video-translate run-dub --url "https://www.youtube.com/watch?v=VIDEO_ID" --confi
           <label>Target Lang</label>
           <input id="ytTargetLang" type="text" value="tr" />
         </div>
+        <div class="field">
+          <label>Downloads Dir</label>
+          <input id="downloadsDir" type="text" value="downloads" />
+        </div>
       </div>
       <label class="check"><input id="ytEmitSrt" type="checkbox" checked /> M1 transcript SRT uret</label>
-      <label class="check"><input id="ytRunM3" type="checkbox" checked /> M3 (TTS dublaj) calistir</label>
+      <label class="check"><input id="ytRunM3" type="checkbox" checked disabled /> M3 (TTS dublaj) zorunlu</label>
+      <label class="check"><input id="cleanupIntermediate" type="checkbox" checked /> Ara dosyalari temizle</label>
       <div class="actions">
         <button id="youtubeRunBtn">YouTube'dan Dublaj Baslat</button>
       </div>
@@ -573,10 +563,12 @@ video-translate run-dub --url "https://www.youtube.com/watch?v=VIDEO_ID" --confi
       body.set("source_url", document.getElementById("sourceUrl").value.trim());
       body.set("config_path", document.getElementById("configPath").value.trim());
       body.set("workspace_dir", document.getElementById("workspaceDir").value.trim());
+      body.set("downloads_dir", document.getElementById("downloadsDir").value.trim());
       body.set("run_id", document.getElementById("runId").value.trim());
       body.set("emit_srt", document.getElementById("ytEmitSrt").checked ? "1" : "0");
       body.set("target_lang", document.getElementById("ytTargetLang").value.trim());
       body.set("run_m3", document.getElementById("ytRunM3").checked ? "1" : "0");
+      body.set("cleanup_intermediate", document.getElementById("cleanupIntermediate").checked ? "1" : "0");
       ytStatusEl.textContent = "YouTube akisi calisiyor...";
       ytStatusEl.classList.remove("err");
       ytOutputEl.textContent = "";
@@ -589,7 +581,7 @@ video-translate run-dub --url "https://www.youtube.com/watch?v=VIDEO_ID" --confi
         if (!res.ok || !payload.ok) {
           throw new Error(payload.error || ("HTTP " + res.status));
         }
-        ytStatusEl.textContent = "YouTube akisi basarili.";
+        ytStatusEl.textContent = "Final Turkce dublajli video hazir.";
         ytOutputEl.textContent = JSON.stringify(payload, null, 2);
         renderOutputDir(ytOutputDirEl, payload);
         renderDownloadList(ytDownloadsEl, payload.downloadables);
@@ -695,10 +687,12 @@ def _build_handler() -> type[BaseHTTPRequestHandler]:
                         source_url=_pick(form, "source_url", ""),
                         config_path=_as_opt_path(form, "config_path"),
                         workspace_dir=_as_opt_path(form, "workspace_dir"),
+                        downloads_dir=_as_opt_path(form, "downloads_dir"),
                         run_id=_as_opt_text(form, "run_id"),
                         emit_srt=_pick(form, "emit_srt", "1") == "1",
                         target_lang=_pick(form, "target_lang", "tr"),
                         run_m3=_pick(form, "run_m3", "1") == "1",
+                        cleanup_intermediate=_pick(form, "cleanup_intermediate", "1") == "1",
                     )
                     result = execute_youtube_dub_run(request)
             except Exception as exc:  # noqa: BLE001

@@ -97,9 +97,9 @@ video-translate ui --host 127.0.0.1 --port 8765
 
 Then open `http://127.0.0.1:8765` in browser.
 UI now supports YouTube URL based end-to-end flow:
-- `M1 -> prepare-m2 -> run-m2 -> (optional) prepare-m3 -> run-m3`
-- and existing M3-only run-root testing.
-- run sonucunda `Cikti klasoru` ve `Indirilebilir Dosyalar` paneli.
+- `M1 -> prepare-m2 -> run-m2 -> prepare-m3 -> run-m3 -> final MP4 render`
+- final teslim: `downloads/<run_id>/video_dubbed.tr.mp4`
+- ara dosyalar temizleme (cache/gecici) secenegi UI'da varsayilan acik.
 - UI dosya indirme endpointi: `GET /download?path=<repo-ici-dosya-yolu>`.
 
 One-click Windows startup (`.bat`):

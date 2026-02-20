@@ -5,6 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 from video_translate.models import M1Artifacts
+from video_translate.pipeline.delivery import FinalDeliveryArtifacts
 from video_translate.pipeline.m2 import M2Artifacts
 from video_translate.pipeline.m3 import M3Artifacts
 from video_translate.preflight import PreflightReport, ToolCheck
@@ -71,6 +72,9 @@ def test_execute_m3_run_prepare_and_m3(tmp_path: Path) -> None:
 
 def test_execute_youtube_dub_run_full_chain(tmp_path: Path, monkeypatch) -> None:
     run_root = tmp_path / "run_full"
+    downloads_dir = tmp_path / "downloads" / run_root.name
+    final_video = downloads_dir / "video_dubbed.tr.mp4"
+    quality_summary = downloads_dir / "quality_summary.tr.json"
     transcript_json = run_root / "output" / "transcript" / "transcript.en.json"
     transcript_json.parent.mkdir(parents=True, exist_ok=True)
     transcript_json.write_text("{}", encoding="utf-8")
@@ -160,6 +164,17 @@ def test_execute_youtube_dub_run_full_chain(tmp_path: Path, monkeypatch) -> None
             stitched_preview_wav=m3_preview,
         )
 
+    def _fake_deliver(*args, **kwargs):  # noqa: ANN002, ANN003
+        downloads_dir.mkdir(parents=True, exist_ok=True)
+        final_video.write_bytes(b"")
+        quality_summary.write_text("{}", encoding="utf-8")
+        return FinalDeliveryArtifacts(
+            downloads_dir=downloads_dir,
+            dubbed_video_mp4=final_video,
+            quality_summary_json=quality_summary,
+            cleanup_performed=True,
+        )
+
     fake_config = SimpleNamespace(
         tools=SimpleNamespace(yt_dlp="yt-dlp", ffmpeg="ffmpeg"),
         translate=SimpleNamespace(backend="mock", target_language="tr"),
@@ -173,23 +188,27 @@ def test_execute_youtube_dub_run_full_chain(tmp_path: Path, monkeypatch) -> None
     monkeypatch.setattr("video_translate.ui.run_m2_pipeline", _fake_run_m2)
     monkeypatch.setattr("video_translate.ui.prepare_m3_tts_input", _fake_prepare_m3)
     monkeypatch.setattr("video_translate.ui.run_m3_pipeline", _fake_run_m3)
+    monkeypatch.setattr("video_translate.ui.deliver_final_video", _fake_deliver)
 
     result = execute_youtube_dub_run(
         UIYoutubeRequest(
             source_url="https://www.youtube.com/watch?v=abc123",
             config_path=None,
             workspace_dir=tmp_path,
+            downloads_dir=tmp_path / "downloads",
             run_id="demo_run",
             emit_srt=True,
             target_lang="tr",
             run_m3=True,
+            cleanup_intermediate=True,
         )
     )
 
     assert result["ok"] is True
     assert result["run_root"] == str(run_root)
-    assert result["output_dir"] == str(run_root / "output")
-    assert any(path.endswith("tts_preview_stitched.tr.wav") for path in result["downloadables"])
+    assert result["output_dir"] == str(downloads_dir)
+    assert result["downloadables"] == [str(final_video)]
+    assert result["stages"]["delivery"]["dubbed_video_mp4"] == str(final_video)
     assert result["stages"]["m3"] is not None
 
 
@@ -197,7 +216,9 @@ def test_html_page_contains_visible_youtube_controls() -> None:
     html = _html_page()
     assert "Video Translate Studio" in html
     assert "YouTube URL" in html
+    assert "Downloads Dir" in html
     assert "YouTube'dan Dublaj Baslat" in html
+    assert "Ara dosyalari temizle" in html
     assert "Ana Is Akisi" in html
     assert "CLI Kullanim Komutlari" in html
     assert "video-translate run-dub --url" in html

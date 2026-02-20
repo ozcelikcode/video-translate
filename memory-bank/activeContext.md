@@ -3,8 +3,8 @@
 ## Mevcut Odak
 Proje v1 kapanis durumu: tek komutla uctan uca akisi calisan, QA gate destekli M1->M2->M3 dublaj sistemi.
 
-## Handoff Snapshot (2026-02-19)
-- Son test durumu: `python -m pytest -q` -> `67 passed` (2026-02-19).
+## Handoff Snapshot (2026-02-20)
+- Son test durumu: `python -m pytest -q` -> `70 passed` (2026-02-20).
 - CLI komutlari:
   - `doctor`
   - `run-m1`
@@ -144,7 +144,7 @@ Proje v1 kapanis durumu: tek komutla uctan uca akisi calisan, QA gate destekli M
   - Test: `tests/test_ui.py::test_execute_youtube_dub_run_full_chain`
 - UI cache gorunurluk sorunu icin no-cache response basliklari eklendi.
 - UI icine gorunur build etiketi eklendi:
-  - `UI Build: 2026-02-19-output-downloads`
+  - `UI Build: 2026-02-20-final-mp4-downloads`
 - M3 sure uyumu iyilestirildi:
   - kisa kalan segment WAV'lerine hedef sureye kadar sessizlik padding uygulanir
   - `run_m3_manifest.json` icinde `duration_postfit` metrikleri yazilir
@@ -234,6 +234,16 @@ Proje v1 kapanis durumu: tek komutla uctan uca akisi calisan, QA gate destekli M
   - CLI komutu: `video-translate ui`
   - Dokuman: `docs/ui.md`
   - test dosyasi: `tests/test_ui.py`
+- Final teslim akisi eklendi (YouTube -> Turkce MP4):
+  - yeni modul: `src/video_translate/pipeline/delivery.py`
+  - M3 stitched audio + kaynak video ffmpeg ile birlestirilir
+  - final cikti: `downloads/<run_id>/video_dubbed.tr.mp4`
+  - kalite ozeti: `downloads/<run_id>/quality_summary.tr.json`
+  - UI YouTube akisinda varsayilan: ara dosyalari temizle (`cleanup_intermediate=true`)
+  - run workspace temizligi: `runs/<run_id>` klasoru basarili teslim sonrasi silinir
+  - UI indirilebilir liste yalniz final MP4'e indirgenir
+  - UI build etiketi: `2026-02-20-final-mp4-downloads`
+  - testler: `tests/test_delivery.py`, `tests/test_ui.py`
 
 ## Aktif Kararlar
 - Gelistirme `M1 -> M5` kademeleriyle ilerleyecek.
