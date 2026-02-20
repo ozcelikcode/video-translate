@@ -4,6 +4,7 @@ import importlib.util
 import shutil
 import sys
 from dataclasses import dataclass
+from pathlib import Path, PureWindowsPath
 
 
 @dataclass(frozen=True)
@@ -29,6 +30,9 @@ class PreflightReport:
     torch_available: bool | None
     tts_backend: str
     espeak: ToolCheck | None
+    piper: ToolCheck | None = None
+    piper_model_path: str | None = None
+    piper_model_exists: bool | None = None
 
     @property
     def ok(self) -> bool:
@@ -43,6 +47,12 @@ class PreflightReport:
         tts_ok = True
         if self.tts_backend == "espeak" and self.espeak is not None:
             tts_ok = self.espeak is not None and self.espeak.ok
+        if self.tts_backend == "piper":
+            tts_ok = (
+                self.piper is not None
+                and self.piper.ok
+                and self.piper_model_exists is True
+            )
         return base_ok and translate_ok and tts_ok
 
 
@@ -61,10 +71,61 @@ def _resolve_espeak_toolcheck(espeak_bin: str) -> ToolCheck:
         if key in seen:
             continue
         seen.add(key)
-        path = shutil.which(command)
+        path = _resolve_command_path(command)
         if path is not None:
             return ToolCheck(name="espeak", command=command, path=path)
     return ToolCheck(name="espeak", command=configured, path=None)
+
+
+def _resolve_piper_toolcheck(piper_bin: str) -> ToolCheck:
+    configured = piper_bin.strip() or "piper"
+    candidates = [configured]
+    if configured.lower() != "piper":
+        candidates.append("piper")
+    root = _project_root()
+    candidates.extend(
+        [
+            str(root / ".venv" / "Scripts" / "piper.exe"),
+            str(root / ".venv" / "bin" / "piper"),
+        ]
+    )
+
+    seen: set[str] = set()
+    for command in candidates:
+        key = command.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        path = _resolve_command_path(command)
+        if path is not None:
+            return ToolCheck(name="piper", command=command, path=path)
+    return ToolCheck(name="piper", command=configured, path=None)
+
+
+def _project_root() -> Path:
+    return Path(__file__).resolve().parents[2]
+
+
+def _is_explicit_path(command: str) -> bool:
+    return "/" in command or "\\" in command or command.lower().endswith(".exe")
+
+
+def _has_windows_drive(command: str) -> bool:
+    return bool(PureWindowsPath(command).drive)
+
+
+def _resolve_command_path(command: str) -> str | None:
+    normalized = command.strip()
+    if not normalized:
+        return None
+    if _is_explicit_path(normalized):
+        candidate = Path(normalized)
+        if not candidate.is_absolute() and not _has_windows_drive(normalized):
+            candidate = _project_root() / candidate
+        if candidate.exists() and candidate.is_file():
+            return str(candidate)
+        return None
+    return shutil.which(normalized)
 
 
 def run_preflight(
@@ -74,6 +135,8 @@ def run_preflight(
     translate_backend: str = "mock",
     tts_backend: str = "mock",
     espeak_bin: str = "espeak",
+    piper_bin: str = "piper",
+    piper_model_path: Path | None = None,
     check_translate_backend: bool = False,
     check_tts_backend: bool = False,
 ) -> PreflightReport:
@@ -91,8 +154,19 @@ def run_preflight(
         sentencepiece_available = importlib.util.find_spec("sentencepiece") is not None
         torch_available = importlib.util.find_spec("torch") is not None
     espeak: ToolCheck | None = None
+    piper: ToolCheck | None = None
+    piper_model_path_text: str | None = None
+    piper_model_exists: bool | None = None
     if check_tts_backend and tts == "espeak":
         espeak = _resolve_espeak_toolcheck(espeak_bin)
+    if check_tts_backend and tts == "piper":
+        piper = _resolve_piper_toolcheck(piper_bin)
+        if piper_model_path is not None:
+            resolved_model_path = piper_model_path.resolve()
+            piper_model_path_text = str(resolved_model_path)
+            piper_model_exists = resolved_model_path.exists() and resolved_model_path.is_file()
+        else:
+            piper_model_exists = False
 
     return PreflightReport(
         python_version=sys.version.split()[0],
@@ -105,6 +179,9 @@ def run_preflight(
         torch_available=torch_available,
         tts_backend=tts,
         espeak=espeak,
+        piper=piper,
+        piper_model_path=piper_model_path_text,
+        piper_model_exists=piper_model_exists,
     )
 
 
@@ -131,4 +208,11 @@ def preflight_errors(report: PreflightReport) -> list[str]:
         if report.espeak is None or not report.espeak.ok:
             command = report.espeak.command if report.espeak is not None else "espeak"
             errors.append(f"Missing espeak executable on PATH (configured command: '{command}').")
+    if report.tts_backend == "piper":
+        if report.piper is None or not report.piper.ok:
+            command = report.piper.command if report.piper is not None else "piper"
+            errors.append(f"Missing piper executable on PATH (configured command: '{command}').")
+        if report.piper_model_exists is not True:
+            target = report.piper_model_path or "tts.piper_model_path"
+            errors.append(f"Piper model file not found: '{target}'.")
     return errors

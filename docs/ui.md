@@ -25,7 +25,7 @@ Bu metni gormuyorsaniz tarayicida `Ctrl+F5` ile sert yenileme yapin.
 - Varsayilan run root:
   - `runs/finalize_m1m2/m1_real_medium_cpu`
 - Varsayilan profil:
-  - `configs/profiles/gtx1650_i5_12500h.toml`
+  - `configs/profiles/gtx1650_piper.toml`
 - YouTube akisi endpointi:
   - `POST /run-youtube-dub`
 - YouTube job durum endpointi:
@@ -40,6 +40,12 @@ Bu metni gormuyorsaniz tarayicida `Ctrl+F5` ile sert yenileme yapin.
   - `Ilerleme: %X - <faz>` metni ve progress bar canli guncellenir
 - UI, varsayilan olarak ara dosyalari temizler ve yalniz final MP4 teslim eder.
 - Bu ortamda `espeak` PATH'te degilse, `espeak` profili ile calisma preflight'ta durur.
+- Yuksek kalite piper icin:
+  - `piper` binary: `.venv/Scripts/piper.exe` (profil varsayilani)
+  - `models/piper/tr_TR-dfki-medium.onnx`
+  - `models/piper/tr_TR-dfki-medium.onnx.json`
+  - kaynaklar: `rhasspy/piper` releases + `rhasspy/piper-voices` (HF)
+- `open_project.bat` Piper runtime ve model dosyalarini eksikse otomatik hazirlar.
 - Windows hizli kurulum:
   - `winget install --id espeak.espeak -e`
 - `mock` TTS backend yalniz M3 test akisinda kullanilmalidir; YouTube final teslim akisinda engellenir.

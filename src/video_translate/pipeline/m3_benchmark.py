@@ -81,6 +81,8 @@ def run_m3_profile_benchmark(
             translate_backend=config.translate.backend,
             tts_backend=config.tts.backend,
             espeak_bin=config.tts.espeak_bin,
+            piper_bin=getattr(config.tts, "piper_bin", "piper"),
+            piper_model_path=getattr(config.tts, "piper_model_path", None),
             check_translate_backend=False,
             check_tts_backend=True,
         )

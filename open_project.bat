@@ -68,7 +68,7 @@ if errorlevel 1 (
   echo [ERROR] pip guncellenemedi.
   goto :fail
 )
-"%VENV_PY%" -m pip install -e ".[dev,m2]"
+"%VENV_PY%" -m pip install -e ".[dev,m2,tts_piper]"
 if errorlevel 1 (
   echo [ERROR] Proje bagimliliklari kurulurken hata olustu.
   goto :fail
@@ -76,11 +76,30 @@ if errorlevel 1 (
 
 :after_install
 
+if not exist ".venv\Scripts\piper.exe" (
+  echo [video-translate] Piper runtime kuruluyor...
+  "%VENV_PY%" -m pip install "piper-tts>=1.4.1" "pathvalidate>=3.2.3"
+  if errorlevel 1 (
+    echo [ERROR] Piper runtime kurulumu basarisiz.
+    goto :fail
+  )
+)
+
+echo [video-translate] Piper model dosyalari kontrol ediliyor...
+powershell -NoProfile -Command "$ErrorActionPreference='Stop'; $modelPath='models/piper/tr_TR-dfki-medium.onnx'; $configPath='models/piper/tr_TR-dfki-medium.onnx.json'; $modelUrl='https://huggingface.co/rhasspy/piper-voices/resolve/main/tr/tr_TR/dfki/medium/tr_TR-dfki-medium.onnx?download=true'; $configUrl='https://huggingface.co/rhasspy/piper-voices/resolve/main/tr/tr_TR/dfki/medium/tr_TR-dfki-medium.onnx.json?download=true'; New-Item -ItemType Directory -Force -Path (Split-Path -Parent $modelPath) | Out-Null; if (!(Test-Path $modelPath)) { Invoke-WebRequest -Uri $modelUrl -OutFile $modelPath }; if (!(Test-Path $configPath)) { Invoke-WebRequest -Uri $configUrl -OutFile $configPath }"
+if errorlevel 1 (
+  echo [ERROR] Piper model dosyalari hazirlanamadi.
+  goto :fail
+)
+
 echo [video-translate] Ortam kontrolu calisiyor...
-if exist "configs\profiles\gtx1650_i5_12500h.toml" (
-  "%VENV_PY%" -m video_translate.cli doctor --config configs\profiles\gtx1650_i5_12500h.toml
-) else (
+set "DOCTOR_CONFIG="
+if exist "configs\profiles\gtx1650_piper.toml" set "DOCTOR_CONFIG=configs\profiles\gtx1650_piper.toml"
+if "%DOCTOR_CONFIG%"=="" if exist "configs\profiles\gtx1650_i5_12500h.toml" set "DOCTOR_CONFIG=configs\profiles\gtx1650_i5_12500h.toml"
+if "%DOCTOR_CONFIG%"=="" (
   "%VENV_PY%" -m video_translate.cli doctor
+) else (
+  "%VENV_PY%" -m video_translate.cli doctor --config "%DOCTOR_CONFIG%"
 )
 if errorlevel 1 (
   echo [ERROR] Doctor kontrolu basarisiz. Ciktiyi inceleyip tekrar dene.

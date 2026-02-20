@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from video_translate.config import ASRConfig
 from video_translate.models import TranscriptDocument, TranscriptSegment, WordTimestamp
@@ -54,6 +54,7 @@ def _transcribe_and_collect(
     device: str,
     compute_type: str,
     asr_config: ASRConfig,
+    on_segment_collected: Callable[[int], None] | None = None,
 ) -> tuple[list[Any], Any]:
     segments_iter, info = _transcribe_with_settings(
         audio_path=audio_path,
@@ -64,10 +65,19 @@ def _transcribe_and_collect(
     )
     # faster-whisper returns a generator that can raise at iteration time.
     # Force evaluation here so fallback logic can catch runtime failures.
-    return list(segments_iter), info
+    collected: list[Any] = []
+    for index, item in enumerate(segments_iter, start=1):
+        collected.append(item)
+        if on_segment_collected is not None:
+            on_segment_collected(index)
+    return collected, info
 
 
-def transcribe_audio(audio_path: Path, asr_config: ASRConfig) -> TranscriptDocument:
+def transcribe_audio(
+    audio_path: Path,
+    asr_config: ASRConfig,
+    on_segment_collected: Callable[[int], None] | None = None,
+) -> TranscriptDocument:
     try:
         raw_segments, info = _transcribe_and_collect(
             audio_path=audio_path,
@@ -75,6 +85,7 @@ def transcribe_audio(audio_path: Path, asr_config: ASRConfig) -> TranscriptDocum
             device=asr_config.device,
             compute_type=asr_config.compute_type,
             asr_config=asr_config,
+            on_segment_collected=on_segment_collected,
         )
     except Exception as exc:  # noqa: BLE001
         # Primary ASR run failed. If fallback is enabled and fallback settings
@@ -101,6 +112,7 @@ def transcribe_audio(audio_path: Path, asr_config: ASRConfig) -> TranscriptDocum
             device=asr_config.fallback_device,
             compute_type=asr_config.fallback_compute_type,
             asr_config=asr_config,
+            on_segment_collected=on_segment_collected,
         )
 
     segments: list[TranscriptSegment] = []

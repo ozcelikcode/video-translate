@@ -36,6 +36,7 @@ def normalize_audio_for_asr(
     sample_rate: int,
     channels: int,
     codec: str,
+    timeout_seconds: float | None = 3600.0,
 ) -> Path:
     output_wav.parent.mkdir(parents=True, exist_ok=True)
     command = build_ffmpeg_normalize_command(
@@ -46,8 +47,7 @@ def normalize_audio_for_asr(
         channels=channels,
         codec=codec,
     )
-    run_command(command)
+    run_command(command, timeout_seconds=timeout_seconds)
     if not output_wav.exists():
         raise FileNotFoundError(f"Expected normalized audio was not created: {output_wav}")
     return output_wav
-

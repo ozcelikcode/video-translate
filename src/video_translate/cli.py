@@ -38,6 +38,8 @@ def doctor(
         translate_backend=config.translate.backend,
         tts_backend=config.tts.backend,
         espeak_bin=config.tts.espeak_bin,
+        piper_bin=getattr(config.tts, "piper_bin", "piper"),
+        piper_model_path=getattr(config.tts, "piper_model_path", None),
         check_translate_backend=True,
         check_tts_backend=True,
     )
@@ -53,6 +55,16 @@ def doctor(
         typer.echo(f"torch: {'OK' if report.torch_available else 'MISSING'}")
     if report.tts_backend == "espeak":
         typer.echo(f"espeak: {report.espeak.path if report.espeak and report.espeak.path else 'MISSING'}")
+    if report.tts_backend == "piper":
+        typer.echo(f"piper: {report.piper.path if report.piper and report.piper.path else 'MISSING'}")
+        typer.echo(
+            "piper_model: "
+            + (
+                report.piper_model_path
+                if report.piper_model_exists
+                else f"MISSING ({report.piper_model_path or 'tts.piper_model_path'})"
+            )
+        )
 
     if errors:
         for error in errors:
@@ -198,6 +210,8 @@ def run_m1(
             translate_backend=config.translate.backend,
             tts_backend=config.tts.backend,
             espeak_bin=config.tts.espeak_bin,
+            piper_bin=getattr(config.tts, "piper_bin", "piper"),
+            piper_model_path=getattr(config.tts, "piper_model_path", None),
             check_translate_backend=False,
             check_tts_backend=False,
         )
@@ -354,6 +368,8 @@ def run_m2(
         translate_backend=config.translate.backend,
         tts_backend=config.tts.backend,
         espeak_bin=config.tts.espeak_bin,
+        piper_bin=getattr(config.tts, "piper_bin", "piper"),
+        piper_model_path=getattr(config.tts, "piper_model_path", None),
         check_translate_backend=True,
         check_tts_backend=False,
     )
@@ -453,6 +469,8 @@ def run_m3(
         translate_backend=config.translate.backend,
         tts_backend=config.tts.backend,
         espeak_bin=config.tts.espeak_bin,
+        piper_bin=getattr(config.tts, "piper_bin", "piper"),
+        piper_model_path=getattr(config.tts, "piper_model_path", None),
         check_translate_backend=False,
         check_tts_backend=True,
     )

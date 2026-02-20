@@ -3,6 +3,7 @@
 import json
 import mimetypes
 import threading
+import time
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -134,7 +135,8 @@ def _ensure_non_mock_tts_backend_for_final_flow(backend_name: str) -> None:
         raise RuntimeError(
             "YouTube final teslim akisi tts.backend='mock' ile calisamaz. "
             "Mock backend sadece test tonu (beep) uretir. "
-            "Lutfen tts.backend='espeak' kullanin (ornek: configs/profiles/gtx1650_i5_12500h.toml)."
+            "Lutfen tts.backend='piper' (onerilen) veya 'espeak' kullanin "
+            "(ornek: configs/profiles/gtx1650_piper.toml)."
         )
 
 
@@ -233,6 +235,8 @@ def execute_youtube_dub_run(
         translate_backend=config.translate.backend,
         tts_backend=config.tts.backend,
         espeak_bin=config.tts.espeak_bin,
+        piper_bin=getattr(config.tts, "piper_bin", "piper"),
+        piper_model_path=getattr(config.tts, "piper_model_path", None),
         check_translate_backend=True,
         check_tts_backend=request.run_m3,
     )
@@ -242,14 +246,77 @@ def execute_youtube_dub_run(
     _notify_progress(progress_hook, 12, "On kontroller tamamlandi.")
 
     _notify_progress(progress_hook, 18, "M1 basladi: indirme + ASR...")
-    m1_artifacts = run_m1_pipeline(
-        source_url=source_url,
-        config=config,
-        workspace_dir=request.workspace_dir,
-        run_id=request.run_id,
-        emit_srt=request.emit_srt,
-        preflight_report=preflight_report,
-    )
+    m1_progress_state: dict[str, Any] = {
+        "percent": 18,
+        "phase": "M1 basladi: indirme + ASR...",
+    }
+
+    def _m1_progress(message: str) -> None:
+        lowered = message.lower()
+        if "indiriliyor" in lowered:
+            m1_progress_state["percent"] = 22
+            m1_progress_state["phase"] = message
+            _notify_progress(progress_hook, 22, message)
+            return
+        if "normalize" in lowered:
+            m1_progress_state["percent"] = 27
+            m1_progress_state["phase"] = message
+            _notify_progress(progress_hook, 27, message)
+            return
+        if "asr basladi" in lowered:
+            m1_progress_state["percent"] = 31
+            m1_progress_state["phase"] = message
+            _notify_progress(progress_hook, 31, message)
+            return
+        if "asr segment" in lowered:
+            m1_progress_state["percent"] = 34
+            m1_progress_state["phase"] = message
+            _notify_progress(progress_hook, 34, message)
+            return
+        if "transcript" in lowered:
+            m1_progress_state["percent"] = 36
+            m1_progress_state["phase"] = message
+            _notify_progress(progress_hook, 36, message)
+            return
+        if "qa raporu" in lowered:
+            m1_progress_state["percent"] = 37
+            m1_progress_state["phase"] = message
+            _notify_progress(progress_hook, 37, message)
+            return
+        m1_progress_state["percent"] = 33
+        m1_progress_state["phase"] = message
+        _notify_progress(progress_hook, 33, message)
+
+    m1_stop_event = threading.Event()
+
+    def _m1_heartbeat() -> None:
+        start_time = time.monotonic()
+        while not m1_stop_event.wait(8.0):
+            elapsed_seconds = int(time.monotonic() - start_time)
+            percent = int(m1_progress_state["percent"])
+            phase = str(m1_progress_state["phase"])
+            _notify_progress(
+                progress_hook,
+                percent,
+                f"{phase} (suruyor: {elapsed_seconds}s)",
+            )
+
+    m1_heartbeat_thread = threading.Thread(target=_m1_heartbeat, daemon=True)
+    m1_heartbeat_thread.start()
+
+    try:
+        m1_artifacts = run_m1_pipeline(
+            source_url=source_url,
+            config=config,
+            workspace_dir=request.workspace_dir,
+            run_id=request.run_id,
+            emit_srt=request.emit_srt,
+            preflight_report=preflight_report,
+            progress_hook=_m1_progress,
+        )
+    finally:
+        m1_stop_event.set()
+        m1_heartbeat_thread.join(timeout=0.1)
     _notify_progress(progress_hook, 38, "M1 tamamlandi.")
     run_root = m1_artifacts.run_root
     m2_input = run_root / "output" / "translate" / f"translation_input.en-{target_lang}.json"
@@ -614,12 +681,13 @@ YouTube Dub Akisi:
 2) M1 + M2 + M3 calisir
 3) Final TR dublajli MP4 `downloads/` altina uretilir
 4) Ara dosyalar (cache/gecici) temizlenir
+5) Yuksek kalite icin `gtx1650_piper.toml` + `models/piper/*.onnx` kullan
         </pre>
       </div>
       <div class="panel">
         <pre>
 CLI Kullanim Komutlari:
-video-translate run-dub --url "https://www.youtube.com/watch?v=VIDEO_ID" --config configs/profiles/gtx1650_i5_12500h.toml
+video-translate run-dub --url "https://www.youtube.com/watch?v=VIDEO_ID" --config configs/profiles/gtx1650_piper.toml
 video-translate run-dub --url "https://www.youtube.com/watch?v=VIDEO_ID" --config configs/profiles/gtx1650_espeak.toml --m3-closure
         </pre>
       </div>
@@ -671,7 +739,7 @@ video-translate run-dub --url "https://www.youtube.com/watch?v=VIDEO_ID" --confi
         </div>
         <div class="field">
           <label>Config Path (opsiyonel)</label>
-          <input id="configPath" type="text" value="configs/profiles/gtx1650_i5_12500h.toml" />
+          <input id="configPath" type="text" value="configs/profiles/gtx1650_piper.toml" />
         </div>
         <div class="field">
           <label>Target Lang</label>
@@ -818,6 +886,17 @@ video-translate run-dub --url "https://www.youtube.com/watch?v=VIDEO_ID" --confi
         }
 
         setYoutubeProgress(payload.progress_percent, payload.phase);
+        ytOutputEl.textContent = JSON.stringify(
+          {
+            job_id: payload.job_id,
+            status: payload.status,
+            progress_percent: payload.progress_percent,
+            phase: payload.phase,
+            updated_at_utc: payload.updated_at_utc,
+          },
+          null,
+          2
+        );
 
         if (payload.status === "completed") {
           stopYoutubePolling();

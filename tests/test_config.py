@@ -40,7 +40,7 @@ def test_load_config_applies_override(tmp_path: Path) -> None:
     assert config.tts.backend == "mock"
     assert config.tts.sample_rate == 24000
     assert config.tts.min_segment_seconds == 0.12
-    assert config.tts.espeak_bin == "espeak"
+    assert Path(config.tts.espeak_bin) == Path("C:/Program Files/eSpeak NG/espeak-ng.exe")
     assert config.tts.espeak_voice == "tr"
     assert config.tts.espeak_speed_wpm == 165
     assert config.tts.espeak_pitch == 50
@@ -52,6 +52,13 @@ def test_load_config_applies_override(tmp_path: Path) -> None:
     assert config.tts.max_duration_delta_seconds == 0.08
     assert config.tts.qa_max_postfit_segment_ratio == 0.60
     assert config.tts.qa_max_postfit_seconds_ratio == 0.35
+    assert config.tts.piper_bin == "piper"
+    assert config.tts.piper_model_path is None
+    assert config.tts.piper_config_path is None
+    assert config.tts.piper_speaker is None
+    assert config.tts.piper_length_scale == 1.0
+    assert config.tts.piper_noise_scale == 0.667
+    assert config.tts.piper_noise_w == 0.8
 
 
 def test_load_config_rejects_non_positive_values(tmp_path: Path) -> None:
@@ -246,3 +253,55 @@ def test_load_config_rejects_tts_postfit_seconds_ratio_above_one(tmp_path: Path)
 
     with pytest.raises(ValueError, match="tts.qa_max_postfit_seconds_ratio"):
         load_config(override)
+
+
+def test_load_config_rejects_unsupported_tts_backend(tmp_path: Path) -> None:
+    override = tmp_path / "invalid_tts_backend.toml"
+    override.write_text(
+        "\n".join(
+            [
+                "[tts]",
+                'backend = "invalid"',
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="tts.backend"):
+        load_config(override)
+
+
+def test_load_config_rejects_non_positive_piper_length_scale(tmp_path: Path) -> None:
+    override = tmp_path / "invalid_tts_piper_length_scale.toml"
+    override.write_text(
+        "\n".join(
+            [
+                "[tts]",
+                "piper_length_scale = 0.0",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="tts.piper_length_scale"):
+        load_config(override)
+
+
+def test_load_config_resolves_relative_piper_bin_path(tmp_path: Path) -> None:
+    override = tmp_path / "piper_bin_relative.toml"
+    override.write_text(
+        "\n".join(
+            [
+                "[tts]",
+                'backend = "piper"',
+                'piper_bin = ".venv/Scripts/piper.exe"',
+                'piper_model_path = "models/piper/tr_TR-dfki-medium.onnx"',
+                'piper_config_path = "models/piper/tr_TR-dfki-medium.onnx.json"',
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    config = load_config(override)
+    repo_root = Path(__file__).resolve().parents[1]
+    assert config.tts.piper_bin == str(repo_root / ".venv" / "Scripts" / "piper.exe")

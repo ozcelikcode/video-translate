@@ -4,7 +4,7 @@
 Proje v1 kapanis durumu: tek komutla uctan uca akisi calisan, QA gate destekli M1->M2->M3 dublaj sistemi.
 
 ## Handoff Snapshot (2026-02-20)
-- Son test durumu: `python -m pytest -q` -> `74 passed` (2026-02-20).
+- Son test durumu: `python -m pytest -q` -> `85 passed` (2026-02-20).
 - CLI komutlari:
   - `doctor`
   - `run-m1`
@@ -20,7 +20,7 @@ Proje v1 kapanis durumu: tek komutla uctan uca akisi calisan, QA gate destekli M
   - `tune-m3-espeak`
   - `finish-m3`
   - `ui`
-- M3 su an `mock` ve `espeak` backendleri ile calisiyor.
+- M3 su an `mock`, `espeak` ve `piper` backendleri ile calisiyor.
 - Calisma agaci temiz degil (commit edilmemis degisiklikler var).
 - Eklenen yeni M3 dosyalari:
   - `src/video_translate/pipeline/m3.py`
@@ -272,6 +272,46 @@ Proje v1 kapanis durumu: tek komutla uctan uca akisi calisan, QA gate destekli M
   - testler:
     - `tests/test_preflight.py::test_run_preflight_espeak_backend_accepts_espeak_ng_fallback`
     - `tests/test_tts_backends.py::test_build_tts_backend_espeak_prefers_espeak_ng_when_espeak_missing`
+- Yuksek kalite TTS iyilestirmesi eklendi (robotik ses azaltma):
+  - yeni backend: `piper` (`src/video_translate/tts/backends.py`)
+  - yeni profil: `configs/profiles/gtx1650_piper.toml`
+  - yeni config alanlari:
+    - `tts.piper_bin`
+    - `tts.piper_model_path`
+    - `tts.piper_config_path`
+    - `tts.piper_speaker`
+    - `tts.piper_length_scale`
+    - `tts.piper_noise_scale`
+    - `tts.piper_noise_w`
+  - preflight/doctor `piper` binary + model dosyasi kontrolu yapar.
+  - UI varsayilan config yolu yuksek kalite profile cekildi:
+    - `configs/profiles/gtx1650_piper.toml`
+  - `run-dub` ve YouTube final guard mesaji `piper` onerisini icerir.
+  - ek testler:
+    - `tests/test_preflight.py` (piper binary+model kontrolleri)
+    - `tests/test_tts_backends.py` (piper backend build/synthesize)
+    - `tests/test_config.py` (piper config dogrulamalari)
+  - Son dogrulama: `python -m pytest -q` -> `82 passed` (2026-02-20).
+- UI takilma gorunurlugu guclendirildi (M1 %18 sabit gorunme sorunu):
+  - `pipeline.m1.run_m1_pipeline` icine asama/progress callback eklendi:
+    - indirme
+    - normalize
+    - ASR baslangic
+    - ASR segment cozulme
+    - transcript/QA yazimi
+  - `ui.execute_youtube_dub_run` bu callbackleri yuzde/faz metnine mapler (M1 icinde alt-asama ilerlemesi gorunur).
+  - UI polling paneli calisirken `ytOutput` alaninda canli job durumu (`status/progress_percent/phase/updated_at_utc`) yazilir.
+  - `run_command` timeout destegi eklendi; `yt-dlp` ve `ffmpeg normalize` cagrilarinda timeout uygulanir (sonsuz bekleme riski azaltildi).
+  - timeout davranisi testi: `tests/test_subprocess_utils.py`
+  - M1 uzun adimlarda heartbeat thread eklendi:
+    - her ~8 saniyede bir `suruyor: Ns` ekli faz mesaji doner
+    - indirme/ASR adimi uzun surdugunde yuzde ve faz paneli canli kalir
+- Piper preflight/bootstrap dayanikliligi guclendirildi:
+  - `preflight` ve `tts.backends` tarafinda `piper` komutu PATH'te olmasa bile repo ici `.venv/Scripts/piper.exe` (ve `.venv/bin/piper`) otomatik fallback ile bulunur.
+  - `config.load_config` path-iceren binary alanlarini (`tts.espeak_bin`, `tts.piper_bin`) repo-kokune gore normalize eder.
+  - `configs/profiles/gtx1650_piper.toml` icinde `tts.piper_bin` varsayilani `.venv/Scripts/piper.exe` yapildi (PATH bagimsiz).
+  - `open_project.bat` kurulum akisi `.[dev,m2,tts_piper]` ile Piper bagimliliklarini kurar, model dosyalarini (`models/piper/tr_TR-dfki-medium.onnx` + `.json`) eksikse otomatik indirir ve doctor'u piper profiliyle calistirir.
+  - Canli ortam dogrulamasi: `video-translate doctor --config configs/profiles/gtx1650_piper.toml` basarili.
 
 ## Aktif Kararlar
 - Gelistirme `M1 -> M5` kademeleriyle ilerleyecek.

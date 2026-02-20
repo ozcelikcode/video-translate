@@ -24,6 +24,13 @@ Pipeline tabanli, moduler, asamali genisletilebilir bir mimari.
 - `io.write_json` ile run manifest yazimi
 - ASR hata dayanimi: GPU OOM durumunda `asr.whisper` CPU fallback
 - TTS binary dayanimi: `preflight` ve TTS backend kurulumunda `espeak` yoksa `espeak-ng` fallback denemesi
+- UI M1 alt-asama gorunurlugu:
+  - `run_m1_pipeline` progress callback yayar (download/normalize/asr/transcript/qa)
+  - UI bu callbackleri yuzde/faz metnine mapleyerek `%18` sabit gorunme algisini azaltir
+  - UI, M1 calisirken heartbeat mesaji da yayar (`suruyor: Ns`) ve panelin canli kalmasini saglar
+- Komut timeout dayanimi:
+  - `utils.run_command` timeout parametresi destekler
+  - `ingest.youtube` ve `ingest.audio` dis komutlari timeout ile calistirilir
 
 ## Uctan Uca Tek Komut Akisi
 - `cli.run-dub` -> `pipeline.full_run.run_full_dub_pipeline`
@@ -78,8 +85,9 @@ Pipeline tabanli, moduler, asamali genisletilebilir bir mimari.
 ## M3 Uygulanan Akis
 - `cli.run-m3` -> `pipeline.m3.run_m3_pipeline`
 - TTS backend secimi: `tts.backends.build_tts_backend`
-- Desteklenen backendler: `mock`, `espeak`
+- Desteklenen backendler: `mock`, `espeak`, `piper`
 - `espeak` sure uyumu: hedef sureye yaklasmak icin adaptif hiz denemeleri (bounded retry)
+- `piper` yuksek kalite ses: ONNX model tabanli yerel sentez (API'siz)
 - Segment bazli WAV ciktilari: `output/tts/segments/seg_XXXXXX.wav`
 - Sure post-fit: hedef sÃ¼reden kisa kalan segmentlere WAV sonuna sessizlik padding
 - Segment stitching preview cikti: `output/tts/tts_preview_stitched.<lang>.wav`
@@ -196,8 +204,10 @@ Pipeline tabanli, moduler, asamali genisletilebilir bir mimari.
 - Sirali akil:
   - Python bulunurlugu kontrolu
   - `.venv` olusturma (yoksa)
-  - `pip install -e .[dev,m2]` (opsiyonel skip)
-  - `video-translate doctor` (profil varsa profil ile)
+  - `pip install -e .[dev,m2,tts_piper]` (opsiyonel skip)
+  - Piper runtime kontrolu (`.venv/Scripts/piper.exe`, yoksa pip ile kurulum)
+  - Piper model dosya bootstrap (`models/piper/tr_TR-dfki-medium.onnx` + `.json`, eksikse indir)
+  - `video-translate doctor` (oncelik: `gtx1650_piper.toml`)
   - `video-translate ui` (opsiyonel no-ui)
 
 ## M3 Contract Ozet
@@ -227,6 +237,12 @@ Pipeline tabanli, moduler, asamali genisletilebilir bir mimari.
   - M3 backend: `espeak`
 - Doctor: profilde `transformers` backend seciliyse M2 Python bagimliliklarini dogrular
   - profilde `tts.backend=espeak` seciliyse `espeak` binary'si dogrulanir
+  - profilde `tts.backend=piper` seciliyse `piper` binary + model dosyasi dogrulanir
+- Piper binary cozumleme:
+  - PATH'teki `piper` komutuna ek olarak repo ici `.venv/Scripts/piper.exe` (Windows) ve `.venv/bin/piper` (Unix) fallback olarak denenir.
+- Yeni yuksek kalite profil:
+  - `configs/profiles/gtx1650_piper.toml`
+  - M3 backend: `piper`
 
 ## Tasarim Prensipleri
 - Tek sorumluluk ilkesi

@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Callable
 
 from video_translate.asr.whisper import transcribe_audio
 from video_translate.config import AppConfig
@@ -12,6 +13,8 @@ from video_translate.io import create_run_paths, write_json, write_srt, write_tr
 from video_translate.models import M1Artifacts
 from video_translate.preflight import PreflightReport
 from video_translate.qa.m1_report import build_m1_qa_report
+
+M1ProgressHook = Callable[[str], None]
 
 
 def _build_run_manifest(
@@ -63,16 +66,21 @@ def run_m1_pipeline(
     run_id: str | None = None,
     emit_srt: bool = True,
     preflight_report: PreflightReport | None = None,
+    progress_hook: M1ProgressHook | None = None,
 ) -> M1Artifacts:
     effective_workspace = workspace_dir or config.pipeline.workspace_dir
     paths = create_run_paths(effective_workspace, run_id)
 
+    if progress_hook is not None:
+        progress_hook("M1: YouTube indiriliyor...")
     download = download_youtube_source(
         url=source_url,
         output_dir=paths.input_dir,
         yt_dlp_bin=config.tools.yt_dlp,
     )
 
+    if progress_hook is not None:
+        progress_hook("M1: Ses normalize ediliyor...")
     normalized_audio = normalize_audio_for_asr(
         ffmpeg_bin=config.tools.ffmpeg,
         input_media=download.media_path,
@@ -82,8 +90,23 @@ def run_m1_pipeline(
         codec=config.pipeline.audio_codec,
     )
 
-    transcript_doc = transcribe_audio(normalized_audio, config.asr)
+    if progress_hook is not None:
+        progress_hook("M1: ASR basladi (ilk calismada model indirilebilir)...")
+
+    def _on_asr_segment(index: int) -> None:
+        if progress_hook is None:
+            return
+        if index <= 3 or index % 8 == 0:
+            progress_hook(f"M1: ASR segment cozuluyor... ({index})")
+
+    transcript_doc = transcribe_audio(
+        normalized_audio,
+        config.asr,
+        on_segment_collected=_on_asr_segment,
+    )
     transcript_json = paths.output_transcript_dir / "transcript.en.json"
+    if progress_hook is not None:
+        progress_hook("M1: Transcript yaziliyor...")
     write_transcript_json(transcript_json, transcript_doc)
 
     transcript_srt: Path | None = None
@@ -93,6 +116,8 @@ def run_m1_pipeline(
 
     qa_report = paths.output_qa_dir / "m1_qa_report.json"
     write_json(qa_report, build_m1_qa_report(transcript_doc))
+    if progress_hook is not None:
+        progress_hook("M1: QA raporu yazildi.")
 
     run_manifest = paths.root / "run_manifest.json"
     artifacts = M1Artifacts(

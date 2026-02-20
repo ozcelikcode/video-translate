@@ -29,7 +29,8 @@ def _ensure_non_mock_tts_backend_for_final_flow(backend_name: str) -> None:
         raise RuntimeError(
             "Final dubbing flow cannot run with tts.backend='mock'. "
             "Mock backend only produces test tones (beep). "
-            "Use tts.backend='espeak' (for example configs/profiles/gtx1650_i5_12500h.toml)."
+            "Use tts.backend='piper' (recommended) or 'espeak' "
+            "(for example configs/profiles/gtx1650_piper.toml)."
         )
 
 
@@ -56,6 +57,8 @@ def run_full_dub_pipeline(
         translate_backend=config.translate.backend,
         tts_backend=config.tts.backend,
         espeak_bin=config.tts.espeak_bin,
+        piper_bin=getattr(config.tts, "piper_bin", "piper"),
+        piper_model_path=getattr(config.tts, "piper_model_path", None),
         check_translate_backend=True,
         check_tts_backend=True,
     )

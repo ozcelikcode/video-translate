@@ -3,7 +3,12 @@ from pathlib import Path
 import pytest
 
 from video_translate.config import TTSConfig
-from video_translate.tts.backends import EspeakTTSBackend, MockTTSBackend, build_tts_backend
+from video_translate.tts.backends import (
+    EspeakTTSBackend,
+    MockTTSBackend,
+    PiperTTSBackend,
+    build_tts_backend,
+)
 
 
 def _base_tts_config(backend: str) -> TTSConfig:
@@ -26,6 +31,13 @@ def _base_tts_config(backend: str) -> TTSConfig:
         qa_max_postfit_seconds_ratio=0.35,
         qa_fail_on_flags=False,
         qa_allowed_flags=(),
+        piper_bin="piper",
+        piper_model_path=Path("models/piper/tr_TR-dfki-medium.onnx"),
+        piper_config_path=Path("models/piper/tr_TR-dfki-medium.onnx.json"),
+        piper_speaker=None,
+        piper_length_scale=1.0,
+        piper_noise_scale=0.667,
+        piper_noise_w=0.8,
     )
 
 
@@ -50,7 +62,27 @@ def test_build_tts_backend_espeak_prefers_espeak_ng_when_espeak_missing(
     monkeypatch.setattr("video_translate.tts.backends.shutil.which", fake_which)
     backend = build_tts_backend(_base_tts_config("espeak"))
     assert isinstance(backend, EspeakTTSBackend)
-    assert backend.espeak_bin == "espeak-ng"
+    assert backend.espeak_bin == "/bin/espeak-ng"
+
+
+def test_build_tts_backend_piper() -> None:
+    backend = build_tts_backend(_base_tts_config("piper"))
+    assert isinstance(backend, PiperTTSBackend)
+
+
+def test_build_tts_backend_piper_prefers_local_venv_binary(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    local_piper = tmp_path / ".venv" / "Scripts" / "piper.exe"
+    local_piper.parent.mkdir(parents=True, exist_ok=True)
+    local_piper.write_text("piper", encoding="utf-8")
+
+    monkeypatch.setattr("video_translate.tts.backends.shutil.which", lambda _: None)
+    monkeypatch.setattr("video_translate.tts.backends._project_root", lambda: tmp_path)
+
+    backend = build_tts_backend(_base_tts_config("piper"))
+    assert isinstance(backend, PiperTTSBackend)
+    assert backend.piper_bin == str(local_piper)
 
 
 def test_build_tts_backend_rejects_unknown() -> None:
@@ -101,6 +133,51 @@ def test_espeak_backend_builds_command_and_writes_wav(monkeypatch: pytest.Monkey
     assert command[0] == "espeak"
     assert "-v" in command
     assert "-w" in command
+
+
+def test_piper_backend_builds_command_and_writes_wav(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    backend = PiperTTSBackend(
+        piper_bin="piper",
+        model_path=tmp_path / "voice.onnx",
+        config_path=tmp_path / "voice.onnx.json",
+        speaker_id=0,
+        length_scale=1.05,
+        noise_scale=0.6,
+        noise_w=0.7,
+        min_segment_seconds=0.12,
+    )
+    output_wav = tmp_path / "seg_piper.wav"
+    captured_calls: list[tuple[list[str], str | None]] = []
+
+    def fake_run_command(command: list[str], cwd: Path | None = None, input_text: str | None = None) -> None:
+        del cwd
+        captured_calls.append((command, input_text))
+        mock_backend = MockTTSBackend(base_tone_hz=220, min_segment_seconds=0.12)
+        mock_backend.synthesize_to_wav(
+            text="merhaba",
+            output_wav=output_wav,
+            target_duration=0.3,
+            sample_rate=24000,
+        )
+
+    monkeypatch.setattr("video_translate.tts.backends.run_command", fake_run_command)
+    duration = backend.synthesize_to_wav(
+        text="merhaba dunya",
+        output_wav=output_wav,
+        target_duration=0.5,
+        sample_rate=24000,
+    )
+
+    assert output_wav.exists()
+    assert duration > 0.0
+    assert captured_calls
+    command, input_text = captured_calls[-1]
+    assert command[0] == "piper"
+    assert "--model" in command
+    assert "--output_file" in command
+    assert "--speaker" in command
+    assert input_text is not None
+    assert "merhaba dunya" in input_text
 
 
 def test_espeak_backend_adaptive_rate_retries_until_tolerance(

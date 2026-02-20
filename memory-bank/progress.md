@@ -149,6 +149,38 @@ Proje v1 (M1->M3) tamamlandi; uctan uca yerel ve API'siz dublaj akislari calisiy
     - `tests/test_preflight.py::test_run_preflight_espeak_backend_accepts_espeak_ng_fallback`
     - `tests/test_tts_backends.py::test_build_tts_backend_espeak_prefers_espeak_ng_when_espeak_missing`
   - yeni toplam test sonucu: `74 passed` (2026-02-20).
+- Ses kalitesi iyilestirmesi icin piper backend eklendi:
+  - yeni TTS backend: `piper` (`src/video_translate/tts/backends.py`)
+  - yeni profil: `configs/profiles/gtx1650_piper.toml`
+  - yeni config alanlari:
+    - `tts.piper_bin`
+    - `tts.piper_model_path`
+    - `tts.piper_config_path`
+    - `tts.piper_speaker`
+    - `tts.piper_length_scale`
+    - `tts.piper_noise_scale`
+    - `tts.piper_noise_w`
+  - preflight/doctor `piper` binary ve model dosyasi dogrulamasi eklendi
+  - UI varsayilan config yolu `gtx1650_piper.toml` yapildi
+  - testler:
+    - `tests/test_preflight.py` (piper preflight kontrolleri)
+    - `tests/test_tts_backends.py` (piper backend)
+    - `tests/test_config.py` (piper config dogrulamasi)
+  - yeni toplam test sonucu: `80 passed` (2026-02-20).
+- M1 takilma gorunurlugu iyilestirmesi eklendi:
+  - `run_m1_pipeline` progress callback ile alt-asama durum mesajlari uretir
+  - UI YouTube akisinda M1 alt-asamalari yuzde/faz metnine maplenir
+  - UI polling panelinde canli job payload (`status/progress_percent/phase/updated_at_utc`) gosterilir
+  - `run_command` timeout destegi eklendi; `yt-dlp` ve `ffmpeg normalize` cagrilarina timeout verildi
+  - M1 uzun adimlarinda heartbeat mesaji eklendi (`suruyor: Ns`)
+  - ek test:
+    - `tests/test_subprocess_utils.py` (timeout davranisi)
+- Piper preflight/runtime sorunu kalici cozuldu:
+  - `preflight` ve `tts.backends` `piper` binary cozumlemesinde repo ici `.venv/Scripts/piper.exe` ve `.venv/bin/piper` fallback'i destekler.
+  - `config.load_config` `tts.espeak_bin` / `tts.piper_bin` path degerlerini repo-kokune gore normalize eder.
+  - `configs/profiles/gtx1650_piper.toml` PATH bagimsiz `tts.piper_bin = ".venv/Scripts/piper.exe"` kullaniyor.
+  - `open_project.bat` Piper bagimliliklarini (`.[dev,m2,tts_piper]`) ve model dosyalarini otomatik hazirlar.
+  - canli dogrulama: `video-translate doctor --config configs/profiles/gtx1650_piper.toml` basarili.
 - Adlandirma disiplin karari netlestirildi:
   - uretim tarafinda `demo/test` adlari kullanilmaz
   - test kodlari yalnizca `tests/` altinda tutulur
@@ -161,7 +193,8 @@ Proje v1 (M1->M3) tamamlandi; uctan uca yerel ve API'siz dublaj akislari calisiy
 - M2 milestone dokumani baslatildi.
 - M3 milestone dokumani baslatildi.
 - Temel birim testleri genisletildi ve gecti.
-- Son test sonucu: `74 passed` (2026-02-20).
+- Son test sonucu: `82 passed` (2026-02-20).
+- Son test sonucu (guncel): `85 passed` (2026-02-20).
 
 ## Calisma Agaci Durumu (Handoff)
 - Commit edilmemis degisiklikler mevcut.

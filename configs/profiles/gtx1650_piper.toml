@@ -1,0 +1,59 @@
+[asr]
+model = "small"
+device = "cuda"
+compute_type = "int8_float16"
+beam_size = 5
+fallback_on_oom = true
+fallback_model = "small"
+fallback_device = "cpu"
+fallback_compute_type = "int8"
+
+[translate]
+backend = "transformers"
+batch_size = 4
+source_language = "en"
+target_language = "tr"
+min_length_ratio = 0.50
+max_length_ratio = 1.80
+glossary_path = "configs/glossary.en-tr.json"
+glossary_case_sensitive = false
+apply_glossary_postprocess = true
+qa_check_terminal_punctuation = true
+qa_check_long_segment_fluency = true
+qa_long_segment_word_threshold = 14
+qa_long_segment_max_pause_punct = 3
+qa_fail_on_flags = false
+qa_allowed_flags = []
+
+[translate.transformers]
+model_id = "facebook/m2m100_418M"
+device = -1
+max_new_tokens = 192
+source_lang_code = "en"
+target_lang_code = "tr"
+
+[tts]
+backend = "piper"
+sample_rate = 22050
+min_segment_seconds = 0.12
+mock_base_tone_hz = 220
+espeak_bin = "C:/Program Files/eSpeak NG/espeak-ng.exe"
+espeak_voice = "tr"
+espeak_speed_wpm = 165
+espeak_pitch = 50
+espeak_adaptive_rate_enabled = true
+espeak_adaptive_rate_min_wpm = 120
+espeak_adaptive_rate_max_wpm = 260
+espeak_adaptive_rate_max_passes = 3
+espeak_adaptive_rate_tolerance_seconds = 0.06
+piper_bin = ".venv/Scripts/piper.exe"
+piper_model_path = "models/piper/tr_TR-dfki-medium.onnx"
+piper_config_path = "models/piper/tr_TR-dfki-medium.onnx.json"
+piper_length_scale = 1.02
+piper_noise_scale = 0.667
+piper_noise_w = 0.8
+max_duration_delta_seconds = 0.08
+qa_max_postfit_segment_ratio = 0.60
+qa_max_postfit_seconds_ratio = 0.35
+qa_fail_on_flags = false
+qa_allowed_flags = []

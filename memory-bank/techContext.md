@@ -11,6 +11,7 @@
 ## Gelistirme Araclari
 - `pip` tabanli baslangic kurulum tanimlandi (`pip install -e .[dev]`)
 - M2 opsiyonel bagimliliklari: `pip install -e .[m2]`
+- Piper TTS opsiyonel bagimliliklari: `pip install -e .[tts_piper]`
 - `ruff` (lint + format)
 - `mypy` (tip kontrolu)
 - `pytest` (test)
@@ -36,6 +37,7 @@
 - Konfigurasyon: `TOML` (`configs/default.toml`)
 - ASR: `faster-whisper` (yerel model)
 - Ingest: harici komutlar (`yt-dlp`, `ffmpeg`)
+- Dis komut katmani: `run_command(..., timeout_seconds=...)` timeout destekler
 - On kontrol: `doctor` komutu ile yerel bagimlilik denetimi
 - M2 hazirlik: `prepare-m2` ile ceviri giris sozlesmesi uretimi
 - Uctan uca tek komut: `run-dub` (URL -> M1 -> M2 -> M3)
@@ -54,7 +56,10 @@
 - Donanim hiz profili: `configs/profiles/gtx1650_fast.toml`
 - Donanim strict kalite profili: `configs/profiles/gtx1650_strict.toml`
 - Donanim espeak profili: `configs/profiles/gtx1650_espeak.toml`
-- GTX1650 profillerinde (i5/fast/strict/espeak) final dublaj icin `tts.backend=espeak` kullanilir.
+- Donanim piper kalite profili: `configs/profiles/gtx1650_piper.toml`
+- GTX1650 profillerinde:
+  - `i5/fast/strict/espeak` profilleri final dublaj icin `tts.backend=espeak` kullanir.
+  - `gtx1650_piper.toml` profili final dublaj icin `tts.backend=piper` kullanir.
 - ASR fallback: GPU OOM algilanirsa CPU (`int8`) fallback
 - Doctor kontrolu: `transformers/sentencepiece/torch` bagimliliklarini da denetler
 - Doctor TTS binary fallback: `espeak` bulunamazsa `espeak-ng` komutu da otomatik denenir
@@ -72,7 +77,7 @@
 - M3 kapanis otomasyonu: `finish-m3`
 - M3 lokal UI: `ui`
 - Final teslim modulu: `pipeline/delivery.py`
-- M3 backend: `mock` ve `espeak` (yerel, API'siz)
+- M3 backend: `mock`, `espeak` ve `piper` (yerel, API'siz)
 - M3 backend modulu: `src/video_translate/tts/backends.py`
 - M3 contract modulu: `src/video_translate/tts/contracts.py`
 - M3 `espeak` adaptif hiz config alanlari:
@@ -129,6 +134,9 @@
   - `run-youtube-dub` asenkron job id dondurur
   - frontend polling ile `progress_percent` + `phase` alanlarini izler
   - ilerleme cubugu ve `%` metni canli guncellenir
+  - M1 alt-asama callbackleri (download/normalize/asr/transcript/qa) ayrik faz metni olarak gosterilir
+  - M1 uzun adimlari icin heartbeat (`suruyor: Ns`) mesaji uretilir
+  - polling sirasinda canli job payload alani (`status/progress_percent/phase/updated_at_utc`) guncellenir
 - UI cache politikasi:
   - HTTP yanitlarinda `Cache-Control: no-store`
   - build etiketi: `2026-02-20-final-mp4-downloads`
@@ -144,9 +152,11 @@
 - M3 QA post-fit guard:
   - post-fit segment/sure oranlari esik ustundeyse kalite bayragi uretir
 - Windows startup script: `open_project.bat`
-  - `.venv` olusturma + `pip install -e .[dev,m2]` + `doctor` + `ui`
+  - `.venv` olusturma + `pip install -e .[dev,m2,tts_piper]` + Piper model bootstrap + `doctor` + `ui`
   - Opsiyonlar: `--skip-install`, `--no-ui`
-- Son tam test sonucu: `74 passed` (2026-02-20)
+- Piper komut cozumleme:
+  - PATH disinda repo ici `.venv/Scripts/piper.exe` ve `.venv/bin/piper` fallback'i desteklenir.
+- Son tam test sonucu: `85 passed` (2026-02-20)
 
 ## Handoff Teknik Notlari
 - M3 icin harici API kullanilmiyor; mevcut backend tamamen yerel dosya uretimi yapiyor.
@@ -160,3 +170,11 @@
   - `tests/test_m3_qa_report.py`
 
 
+- M3 `piper` config alanlari:
+  - `tts.piper_bin`
+  - `tts.piper_model_path`
+  - `tts.piper_config_path`
+  - `tts.piper_speaker`
+  - `tts.piper_length_scale`
+  - `tts.piper_noise_scale`
+  - `tts.piper_noise_w`

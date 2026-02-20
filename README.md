@@ -10,6 +10,7 @@ Current stage: `M3` complete (YouTube ingest + ASR + EN->TR translate + local TT
 - `yt-dlp` available on `PATH`
 - `ffmpeg` available on `PATH`
 - For real voice dubbing: `espeak` or `espeak-ng` available on `PATH`
+- For high-quality local voice: Piper runtime + Turkish model files
 
 Windows quick install (recommended):
 
@@ -22,7 +23,7 @@ winget install --id espeak.espeak -e
 ```bash
 python -m venv .venv
 .venv\Scripts\activate
-pip install -e .[dev]
+pip install -e .[dev,m2,tts_piper]
 ```
 
 Run environment doctor:
@@ -31,14 +32,30 @@ Run environment doctor:
 video-translate doctor
 ```
 
-Recommended profile for GTX 1650 (4GB VRAM) + 16GB RAM:
+High-quality voice profile for GTX 1650 (4GB VRAM) + 16GB RAM:
+
+```bash
+video-translate doctor --config configs/profiles/gtx1650_piper.toml
+video-translate run-dub --url "https://www.youtube.com/watch?v=VIDEO_ID" --config configs/profiles/gtx1650_piper.toml
+```
+
+`gtx1650_piper.toml` uses `tts.backend = "piper"` for more natural local speech.
+Profile varsayilani:
+- `tts.piper_bin = ".venv/Scripts/piper.exe"` (PATH bagimsiz)
+Place Piper model files at:
+- `models/piper/tr_TR-dfki-medium.onnx`
+- `models/piper/tr_TR-dfki-medium.onnx.json`
+
+Piper setup source:
+- Binary: `rhasspy/piper` GitHub releases
+- Model: `rhasspy/piper-voices` (Hugging Face), `tr_TR-dfki-medium`
+
+Compatibility profile (faster setup, lower voice quality):
 
 ```bash
 video-translate doctor --config configs/profiles/gtx1650_i5_12500h.toml
 video-translate run-dub --url "https://www.youtube.com/watch?v=VIDEO_ID" --config configs/profiles/gtx1650_i5_12500h.toml
 ```
-
-Note: this profile now uses `tts.backend = "espeak"` for real speech output.
 
 One-command flow with strict M3 closure (optional auto-tune + strict QA gate):
 
@@ -127,7 +144,9 @@ open_project.bat 127.0.0.1 8765 --no-ui
 This script does:
 - Python version check (3.12+)
 - `.venv` creation (if missing)
-- dependency install (`pip install -e .[dev,m2]`)
+- dependency install (`pip install -e .[dev,m2,tts_piper]`)
+- Piper runtime check (`.venv/Scripts/piper.exe`)
+- Piper model auto-download (only if missing)
 - `doctor` check
 - starts local UI
 
@@ -160,7 +179,8 @@ M3 outputs:
 
 M3 supports these local backends:
 - `mock` (pipeline validation)
-- `espeak` (real local synthesis, no API)
+- `espeak` (real local synthesis, low quality robotic voice)
+- `piper` (real local synthesis, higher quality natural voice)
 
 Final YouTube/`run-dub` delivery flows reject `tts.backend = "mock"` to prevent beep-only outputs.
 

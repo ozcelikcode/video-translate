@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any
 
 import tomllib
@@ -85,6 +85,13 @@ class TTSConfig:
     qa_max_postfit_seconds_ratio: float
     qa_fail_on_flags: bool
     qa_allowed_flags: tuple[str, ...]
+    piper_bin: str = "piper"
+    piper_model_path: Path | None = None
+    piper_config_path: Path | None = None
+    piper_speaker: int | None = None
+    piper_length_scale: float = 1.0
+    piper_noise_scale: float = 0.667
+    piper_noise_w: float = 0.8
 
 
 @dataclass(frozen=True)
@@ -141,6 +148,22 @@ def _required_non_negative_float(value: object, field: str) -> float:
     if parsed < 0.0:
         raise ValueError(f"Config field '{field}' must be >= 0.")
     return parsed
+
+
+def _resolve_binary_command(value: str, root: Path) -> str:
+    normalized = value.strip()
+    if (
+        "/" not in normalized
+        and "\\" not in normalized
+        and not normalized.lower().endswith(".exe")
+    ):
+        return normalized
+
+    candidate = Path(normalized)
+    has_windows_drive = bool(PureWindowsPath(normalized).drive)
+    if not candidate.is_absolute() and not has_windows_drive:
+        candidate = root / candidate
+    return str(candidate)
 
 
 def _deep_merge(left: dict[str, Any], right: dict[str, Any]) -> dict[str, Any]:
@@ -283,6 +306,10 @@ def load_config(config_path: Path | None = None) -> AppConfig:
         "translate.qa_allowed_flags",
     )
     tts_backend = _required_non_empty_str(tts_table.get("backend", "mock"), "tts.backend")
+    if tts_backend not in {"mock", "espeak", "piper"}:
+        raise ValueError(
+            "Config field 'tts.backend' must be one of: mock, espeak, piper."
+        )
     tts_sample_rate = _required_positive_int(tts_table.get("sample_rate", 24000), "tts.sample_rate")
     tts_min_segment_seconds = _required_positive_float(
         tts_table.get("min_segment_seconds", 0.12),
@@ -293,6 +320,7 @@ def load_config(config_path: Path | None = None) -> AppConfig:
         "tts.mock_base_tone_hz",
     )
     tts_espeak_bin = _required_non_empty_str(tts_table.get("espeak_bin", "espeak"), "tts.espeak_bin")
+    tts_espeak_bin = _resolve_binary_command(tts_espeak_bin, root)
     tts_espeak_voice = _required_non_empty_str(tts_table.get("espeak_voice", "tr"), "tts.espeak_voice")
     tts_espeak_speed_wpm = _required_positive_int(
         tts_table.get("espeak_speed_wpm", 165),
@@ -348,6 +376,47 @@ def load_config(config_path: Path | None = None) -> AppConfig:
     tts_qa_allowed_flags = _optional_str_tuple(
         tts_table.get("qa_allowed_flags", []),
         "tts.qa_allowed_flags",
+    )
+    tts_piper_bin = _required_non_empty_str(tts_table.get("piper_bin", "piper"), "tts.piper_bin")
+    tts_piper_bin = _resolve_binary_command(tts_piper_bin, root)
+    tts_piper_model_raw = tts_table.get("piper_model_path", None)
+    tts_piper_model_path: Path | None
+    if tts_piper_model_raw is None:
+        tts_piper_model_path = None
+    else:
+        model_text = str(tts_piper_model_raw).strip()
+        tts_piper_model_path = Path(model_text) if model_text else None
+    if tts_piper_model_path is not None and not tts_piper_model_path.is_absolute():
+        tts_piper_model_path = root / tts_piper_model_path
+    tts_piper_config_raw = tts_table.get("piper_config_path", None)
+    tts_piper_config_path: Path | None
+    if tts_piper_config_raw is None:
+        tts_piper_config_path = None
+    else:
+        config_text = str(tts_piper_config_raw).strip()
+        tts_piper_config_path = Path(config_text) if config_text else None
+    if tts_piper_config_path is not None and not tts_piper_config_path.is_absolute():
+        tts_piper_config_path = root / tts_piper_config_path
+    tts_piper_speaker_raw = tts_table.get("piper_speaker", None)
+    tts_piper_speaker: int | None
+    if tts_piper_speaker_raw is None:
+        tts_piper_speaker = None
+    else:
+        tts_piper_speaker = _required_non_negative_int(
+            tts_piper_speaker_raw,
+            "tts.piper_speaker",
+        )
+    tts_piper_length_scale = _required_positive_float(
+        tts_table.get("piper_length_scale", 1.0),
+        "tts.piper_length_scale",
+    )
+    tts_piper_noise_scale = _required_non_negative_float(
+        tts_table.get("piper_noise_scale", 0.667),
+        "tts.piper_noise_scale",
+    )
+    tts_piper_noise_w = _required_non_negative_float(
+        tts_table.get("piper_noise_w", 0.8),
+        "tts.piper_noise_w",
     )
 
     return AppConfig(
@@ -417,5 +486,12 @@ def load_config(config_path: Path | None = None) -> AppConfig:
             qa_max_postfit_seconds_ratio=tts_qa_max_postfit_seconds_ratio,
             qa_fail_on_flags=tts_qa_fail_on_flags,
             qa_allowed_flags=tts_qa_allowed_flags,
+            piper_bin=tts_piper_bin,
+            piper_model_path=tts_piper_model_path,
+            piper_config_path=tts_piper_config_path,
+            piper_speaker=tts_piper_speaker,
+            piper_length_scale=tts_piper_length_scale,
+            piper_noise_scale=tts_piper_noise_scale,
+            piper_noise_w=tts_piper_noise_w,
         ),
     )
