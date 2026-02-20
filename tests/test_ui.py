@@ -99,8 +99,8 @@ def test_execute_youtube_dub_run_full_chain(tmp_path: Path, monkeypatch) -> None
             transformers_available=None,
             sentencepiece_available=None,
             torch_available=None,
-            tts_backend="mock",
-            espeak=None,
+            tts_backend="espeak",
+            espeak=ToolCheck(name="espeak", command="espeak", path="espeak"),
         )
 
     def _fake_m1(*args, **kwargs):  # noqa: ANN002, ANN003
@@ -178,7 +178,7 @@ def test_execute_youtube_dub_run_full_chain(tmp_path: Path, monkeypatch) -> None
     fake_config = SimpleNamespace(
         tools=SimpleNamespace(yt_dlp="yt-dlp", ffmpeg="ffmpeg"),
         translate=SimpleNamespace(backend="mock", target_language="tr"),
-        tts=SimpleNamespace(backend="mock", espeak_bin="espeak"),
+        tts=SimpleNamespace(backend="espeak", espeak_bin="espeak"),
     )
     monkeypatch.setattr("video_translate.ui.load_config", lambda *_: fake_config)
     monkeypatch.setattr("video_translate.ui.run_preflight", _fake_preflight)
@@ -189,6 +189,8 @@ def test_execute_youtube_dub_run_full_chain(tmp_path: Path, monkeypatch) -> None
     monkeypatch.setattr("video_translate.ui.prepare_m3_tts_input", _fake_prepare_m3)
     monkeypatch.setattr("video_translate.ui.run_m3_pipeline", _fake_run_m3)
     monkeypatch.setattr("video_translate.ui.deliver_final_video", _fake_deliver)
+
+    progress_events: list[tuple[int, str]] = []
 
     result = execute_youtube_dub_run(
         UIYoutubeRequest(
@@ -201,7 +203,8 @@ def test_execute_youtube_dub_run_full_chain(tmp_path: Path, monkeypatch) -> None
             target_lang="tr",
             run_m3=True,
             cleanup_intermediate=True,
-        )
+        ),
+        progress_hook=lambda percent, phase: progress_events.append((percent, phase)),
     )
 
     assert result["ok"] is True
@@ -210,6 +213,32 @@ def test_execute_youtube_dub_run_full_chain(tmp_path: Path, monkeypatch) -> None
     assert result["downloadables"] == [str(final_video)]
     assert result["stages"]["delivery"]["dubbed_video_mp4"] == str(final_video)
     assert result["stages"]["m3"] is not None
+    assert progress_events
+    assert progress_events[-1][0] == 100
+    assert any(percent >= 70 for percent, _ in progress_events)
+
+
+def test_execute_youtube_dub_run_rejects_mock_tts_backend(monkeypatch) -> None:
+    fake_config = SimpleNamespace(
+        tools=SimpleNamespace(yt_dlp="yt-dlp", ffmpeg="ffmpeg"),
+        translate=SimpleNamespace(backend="mock", target_language="tr"),
+        tts=SimpleNamespace(backend="mock", espeak_bin="espeak"),
+    )
+    monkeypatch.setattr("video_translate.ui.load_config", lambda *_: fake_config)
+    with pytest.raises(RuntimeError, match="tts.backend='mock'"):
+        execute_youtube_dub_run(
+            UIYoutubeRequest(
+                source_url="https://www.youtube.com/watch?v=abc123",
+                config_path=None,
+                workspace_dir=None,
+                downloads_dir=None,
+                run_id=None,
+                emit_srt=True,
+                target_lang="tr",
+                run_m3=True,
+                cleanup_intermediate=True,
+            )
+        )
 
 
 def test_html_page_contains_visible_youtube_controls() -> None:
@@ -224,6 +253,7 @@ def test_html_page_contains_visible_youtube_controls() -> None:
     assert "video-translate run-dub --url" in html
     assert "Cikti klasoru" in html
     assert "Indirilebilir Dosyalar" in html
+    assert "Ilerleme: %0 - Hazir." in html
 
 
 def test_resolve_download_path_accepts_project_file() -> None:

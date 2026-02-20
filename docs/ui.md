@@ -28,12 +28,18 @@ Bu metni gormuyorsaniz tarayicida `Ctrl+F5` ile sert yenileme yapin.
   - `configs/profiles/gtx1650_i5_12500h.toml`
 - YouTube akisi endpointi:
   - `POST /run-youtube-dub`
+- YouTube job durum endpointi:
+  - `GET /job-status?job_id=<job_id>`
 - M3-only endpoint:
   - `POST /run-m3`
 - Dosya indirme endpointi:
   - `GET /download?path=<repo-ici-dosya-yolu>`
 - YouTube akisi sonunda final video:
   - `downloads/<run_id>/video_dubbed.tr.mp4`
+- YouTube akisinda ilerleme paneli:
+  - `Ilerleme: %X - <faz>` metni ve progress bar canli guncellenir
 - UI, varsayilan olarak ara dosyalari temizler ve yalniz final MP4 teslim eder.
 - Bu ortamda `espeak` PATH'te degilse, `espeak` profili ile calisma preflight'ta durur.
-- `mock` TTS backend ile is akisi dogrulanabilir.
+- Windows hizli kurulum:
+  - `winget install --id espeak.espeak -e`
+- `mock` TTS backend yalniz M3 test akisinda kullanilmalidir; YouTube final teslim akisinda engellenir.

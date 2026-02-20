@@ -23,6 +23,7 @@ Pipeline tabanli, moduler, asamali genisletilebilir bir mimari.
 - `qa.m1_report.build_m1_qa_report` ile kalite metrigi cikarma
 - `io.write_json` ile run manifest yazimi
 - ASR hata dayanimi: GPU OOM durumunda `asr.whisper` CPU fallback
+- TTS binary dayanimi: `preflight` ve TTS backend kurulumunda `espeak` yoksa `espeak-ng` fallback denemesi
 
 ## Uctan Uca Tek Komut Akisi
 - `cli.run-dub` -> `pipeline.full_run.run_full_dub_pipeline`
@@ -33,6 +34,9 @@ Pipeline tabanli, moduler, asamali genisletilebilir bir mimari.
   - `run_m2_pipeline`
   - varsayilan: `prepare_m3_tts_input` + `run_m3_pipeline`
   - opsiyonel: `--m3-closure` ile `run_m3_closure_workflow`
+- Kalite guvencesi:
+  - final `run-dub` akisinda `tts.backend=mock` reddedilir
+  - sebep: mock backend yalniz test tonu (beep) uretir, konusma dublaji uretmez
 
 ## M2 Hazirlik Akisi
 - `cli.prepare-m2` -> `pipeline.m2_prep.prepare_m2_translation_input`
@@ -157,13 +161,21 @@ Pipeline tabanli, moduler, asamali genisletilebilir bir mimari.
   - `pipeline.m3.run_m3_pipeline`
 - Cikti: JSON sonucunda M3 artefakt yollari + QA ozeti + segment preview
 - HTTP endpointler:
-  - `POST /run-youtube-dub`: URL tabanli M1->M2->(opsiyonel)M3 zinciri
+  - `POST /run-youtube-dub`: URL tabanli M1->M2->M3->final teslim icin asenkron job baslatir
   - `POST /run-m3`: mevcut run-root uzerinden M3 testi
+  - `GET /job-status?job_id=...`: job durumu + ilerleme yuzdesi + faz metni
   - `GET /download?path=...`: repo ici artefaktlari indirme
 - UI/JSON cevaplarinda `Cache-Control: no-store` kullanilir (tarayici cache kaynakli eski UI gorunumlerini engellemek icin).
 - YouTube ve M3 cevap payload'lari:
   - `run_root` + `output_dir` + `downloadables` alanlarini tasir
   - UI bu alanlari kullanarak cikti klasorunu ve indirme linklerini gosterir
+- Job payload desenleri:
+  - `queued/running/completed/failed` durumlari
+  - `progress_percent` (0-100) + `phase` ile asama bazli canli izleme
+  - `completed` durumunda `result` alaninda final YouTube teslim payload'i tasinir
+- Final YouTube teslim guvencesi:
+  - `execute_youtube_dub_run` akisinda `tts.backend=mock` reddedilir
+  - kullaniciya `espeak` profiline gecis mesaji doner
 
 ## Final Teslim Akisi
 - `pipeline.delivery.deliver_final_video`
@@ -200,13 +212,16 @@ Pipeline tabanli, moduler, asamali genisletilebilir bir mimari.
   - `configs/profiles/gtx1650_i5_12500h.toml`
   - ASR: `small` + `cuda` + `int8_float16` + OOM fallback
   - M2: `transformers` backend, CPU ceviri (`device=-1`) ile stabil calisma
+  - M3: `tts.backend=espeak` (real voice)
 - GTX1650 hiz profili:
   - `configs/profiles/gtx1650_fast.toml`
   - ASR beam ve token ayarlari hiz odakli
+  - M3: `tts.backend=espeak` (real voice)
 - GTX1650 strict kalite profili:
   - `configs/profiles/gtx1650_strict.toml`
   - M2 QA gate acik (`translate.qa_fail_on_flags=true`)
   - M3 QA gate acik (`tts.qa_fail_on_flags=true`)
+  - M3: `tts.backend=espeak` (real voice)
 - GTX1650 espeak profili:
   - `configs/profiles/gtx1650_espeak.toml`
   - M3 backend: `espeak`

@@ -81,3 +81,32 @@ def test_run_preflight_espeak_backend_checks_binary(monkeypatch: MonkeyPatch) ->
 
     assert not report.ok
     assert "Missing espeak executable" in " ".join(errors)
+
+
+def test_run_preflight_espeak_backend_accepts_espeak_ng_fallback(monkeypatch: MonkeyPatch) -> None:
+    def fake_which(command: str) -> str | None:
+        if command in {"yt-dlp", "ffmpeg"}:
+            return f"/bin/{command}"
+        if command == "espeak-ng":
+            return "/bin/espeak-ng"
+        return None
+
+    monkeypatch.setattr("video_translate.preflight.shutil.which", fake_which)
+    monkeypatch.setattr(
+        "video_translate.preflight.importlib.util.find_spec",
+        lambda _: types.SimpleNamespace(name="faster_whisper"),
+    )
+
+    report = run_preflight(
+        yt_dlp_bin="yt-dlp",
+        ffmpeg_bin="ffmpeg",
+        tts_backend="espeak",
+        espeak_bin="espeak",
+        check_tts_backend=True,
+    )
+    errors = preflight_errors(report)
+
+    assert report.ok
+    assert errors == []
+    assert report.espeak is not None
+    assert report.espeak.command == "espeak-ng"

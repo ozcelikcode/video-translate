@@ -54,8 +54,10 @@
 - Donanim hiz profili: `configs/profiles/gtx1650_fast.toml`
 - Donanim strict kalite profili: `configs/profiles/gtx1650_strict.toml`
 - Donanim espeak profili: `configs/profiles/gtx1650_espeak.toml`
+- GTX1650 profillerinde (i5/fast/strict/espeak) final dublaj icin `tts.backend=espeak` kullanilir.
 - ASR fallback: GPU OOM algilanirsa CPU (`int8`) fallback
 - Doctor kontrolu: `transformers/sentencepiece/torch` bagimliliklarini da denetler
+- Doctor TTS binary fallback: `espeak` bulunamazsa `espeak-ng` komutu da otomatik denenir
 - M2 run manifest: `run_m2_manifest.json` icinde hiz/sure olcumleri
 - M2 run manifest: `run_m2_manifest.json` icinde `qa_gate` sonucu da bulunur
 - Benchmark raporu: `benchmarks/m2_profile_benchmark.json`
@@ -117,11 +119,16 @@
 - UI dokumani: `docs/ui.md`
 - UI endpointleri:
   - `POST /run-youtube-dub`
+  - `GET /job-status?job_id=...`
   - `POST /run-m3`
   - `GET /download?path=...`
 - UI sonuc panelleri:
   - `Cikti klasoru` (`output_dir`)
   - `Indirilebilir Dosyalar` (`downloadables`)
+- UI YouTube ilerleme modeli:
+  - `run-youtube-dub` asenkron job id dondurur
+  - frontend polling ile `progress_percent` + `phase` alanlarini izler
+  - ilerleme cubugu ve `%` metni canli guncellenir
 - UI cache politikasi:
   - HTTP yanitlarinda `Cache-Control: no-store`
   - build etiketi: `2026-02-20-final-mp4-downloads`
@@ -129,6 +136,7 @@
   - final MP4 cikti: `downloads/<run_id>/video_dubbed.tr.mp4`
   - kalite ozeti: `downloads/<run_id>/quality_summary.tr.json`
   - varsayilan ara dosya temizligi: acik
+  - `tts.backend=mock` ise final YouTube akisi bilincli olarak fail eder (beep-only ciktiyi engeller)
 - M3 sure post-fit:
   - kisa kalan segment WAV'lerine sessizlik padding
   - run manifest: `duration_postfit` metrikleri
@@ -138,7 +146,7 @@
 - Windows startup script: `open_project.bat`
   - `.venv` olusturma + `pip install -e .[dev,m2]` + `doctor` + `ui`
   - Opsiyonlar: `--skip-install`, `--no-ui`
-- Son tam test sonucu: `70 passed` (2026-02-20)
+- Son tam test sonucu: `74 passed` (2026-02-20)
 
 ## Handoff Teknik Notlari
 - M3 icin harici API kullanilmiyor; mevcut backend tamamen yerel dosya uretimi yapiyor.

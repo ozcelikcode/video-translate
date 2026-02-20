@@ -46,6 +46,27 @@ class PreflightReport:
         return base_ok and translate_ok and tts_ok
 
 
+def _resolve_espeak_toolcheck(espeak_bin: str) -> ToolCheck:
+    configured = espeak_bin.strip() or "espeak"
+    candidates = [configured]
+    lowered = configured.lower()
+    if lowered == "espeak":
+        candidates.append("espeak-ng")
+    elif lowered == "espeak-ng":
+        candidates.append("espeak")
+
+    seen: set[str] = set()
+    for command in candidates:
+        key = command.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        path = shutil.which(command)
+        if path is not None:
+            return ToolCheck(name="espeak", command=command, path=path)
+    return ToolCheck(name="espeak", command=configured, path=None)
+
+
 def run_preflight(
     *,
     yt_dlp_bin: str,
@@ -71,7 +92,7 @@ def run_preflight(
         torch_available = importlib.util.find_spec("torch") is not None
     espeak: ToolCheck | None = None
     if check_tts_backend and tts == "espeak":
-        espeak = ToolCheck(name="espeak", command=espeak_bin, path=shutil.which(espeak_bin))
+        espeak = _resolve_espeak_toolcheck(espeak_bin)
 
     return PreflightReport(
         python_version=sys.version.split()[0],

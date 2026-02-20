@@ -39,6 +39,20 @@ def test_build_tts_backend_espeak() -> None:
     assert isinstance(backend, EspeakTTSBackend)
 
 
+def test_build_tts_backend_espeak_prefers_espeak_ng_when_espeak_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_which(command: str) -> str | None:
+        if command == "espeak-ng":
+            return "/bin/espeak-ng"
+        return None
+
+    monkeypatch.setattr("video_translate.tts.backends.shutil.which", fake_which)
+    backend = build_tts_backend(_base_tts_config("espeak"))
+    assert isinstance(backend, EspeakTTSBackend)
+    assert backend.espeak_bin == "espeak-ng"
+
+
 def test_build_tts_backend_rejects_unknown() -> None:
     with pytest.raises(ValueError, match="Unsupported TTS backend"):
         build_tts_backend(_base_tts_config("invalid"))

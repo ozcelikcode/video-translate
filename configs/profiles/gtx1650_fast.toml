@@ -35,7 +35,7 @@ source_lang_code = "en"
 target_lang_code = "tr"
 
 [tts]
-backend = "mock"
+backend = "espeak"
 sample_rate = 24000
 min_segment_seconds = 0.12
 mock_base_tone_hz = 220

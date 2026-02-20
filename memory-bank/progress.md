@@ -123,6 +123,32 @@ Proje v1 (M1->M3) tamamlandi; uctan uca yerel ve API'siz dublaj akislari calisiy
   - UI indirilebilir dosyalar listesi final MP4 ile sinirlandi
   - ara dosya temizligi varsayilan acik (`cleanup_intermediate=true`)
   - testler: `tests/test_delivery.py`, `tests/test_ui.py`
+- UI YouTube asenkron ilerleme yuzdesi eklendi:
+  - `POST /run-youtube-dub` job payload dondurur (`job_id`, `status`, `progress_percent`, `phase`)
+  - `GET /job-status` polling ile canli durum takibi yapilir
+  - UI ilerleme cubugu `%` metni ve faz metni anlik guncellenir
+  - test guncellemesi: `tests/test_ui.py` progress assertleri
+- Son test sonucu tekrar dogrulandi: `70 passed` (2026-02-20).
+- TTS beep/diiit sorunu giderildi:
+  - kok neden: kullanim profillerinde `tts.backend=mock` oldugu icin final videoda konusma yerine test tonu uretiliyordu
+  - cozum:
+    - `configs/profiles/gtx1650_i5_12500h.toml` -> `tts.backend="espeak"`
+    - `configs/profiles/gtx1650_fast.toml` -> `tts.backend="espeak"`
+    - `configs/profiles/gtx1650_strict.toml` -> `tts.backend="espeak"`
+  - final akis guvencesi:
+    - `run-dub` ve UI YouTube final akisinda `tts.backend=mock` bloklanir
+    - kullaniciya acik hata mesajiyla `espeak` profiline gecis yonlendirmesi verilir
+  - testler:
+    - `tests/test_full_run_pipeline.py::test_run_full_dub_pipeline_rejects_mock_tts_backend`
+    - `tests/test_ui.py::test_execute_youtube_dub_run_rejects_mock_tts_backend`
+  - yeni toplam test sonucu: `72 passed` (2026-02-20).
+- eSpeak command fallback eklendi:
+  - `preflight` icinde `espeak` yoksa `espeak-ng` de otomatik kontrol edilir
+  - TTS backend build asamasinda `espeak` <-> `espeak-ng` fallback uygulanir
+  - testler:
+    - `tests/test_preflight.py::test_run_preflight_espeak_backend_accepts_espeak_ng_fallback`
+    - `tests/test_tts_backends.py::test_build_tts_backend_espeak_prefers_espeak_ng_when_espeak_missing`
+  - yeni toplam test sonucu: `74 passed` (2026-02-20).
 - Adlandirma disiplin karari netlestirildi:
   - uretim tarafinda `demo/test` adlari kullanilmaz
   - test kodlari yalnizca `tests/` altinda tutulur
@@ -135,7 +161,7 @@ Proje v1 (M1->M3) tamamlandi; uctan uca yerel ve API'siz dublaj akislari calisiy
 - M2 milestone dokumani baslatildi.
 - M3 milestone dokumani baslatildi.
 - Temel birim testleri genisletildi ve gecti.
-- Son test sonucu: `70 passed` (2026-02-20).
+- Son test sonucu: `74 passed` (2026-02-20).
 
 ## Calisma Agaci Durumu (Handoff)
 - Commit edilmemis degisiklikler mevcut.

@@ -9,6 +9,13 @@ Current stage: `M3` complete (YouTube ingest + ASR + EN->TR translate + local TT
 - Python 3.12+
 - `yt-dlp` available on `PATH`
 - `ffmpeg` available on `PATH`
+- For real voice dubbing: `espeak` or `espeak-ng` available on `PATH`
+
+Windows quick install (recommended):
+
+```powershell
+winget install --id espeak.espeak -e
+```
 
 ## Quick Start
 
@@ -30,6 +37,8 @@ Recommended profile for GTX 1650 (4GB VRAM) + 16GB RAM:
 video-translate doctor --config configs/profiles/gtx1650_i5_12500h.toml
 video-translate run-dub --url "https://www.youtube.com/watch?v=VIDEO_ID" --config configs/profiles/gtx1650_i5_12500h.toml
 ```
+
+Note: this profile now uses `tts.backend = "espeak"` for real speech output.
 
 One-command flow with strict M3 closure (optional auto-tune + strict QA gate):
 
@@ -152,6 +161,8 @@ M3 outputs:
 M3 supports these local backends:
 - `mock` (pipeline validation)
 - `espeak` (real local synthesis, no API)
+
+Final YouTube/`run-dub` delivery flows reject `tts.backend = "mock"` to prevent beep-only outputs.
 
 For real local model translation, set `translate.backend = "transformers"` in config
 and install optional deps:

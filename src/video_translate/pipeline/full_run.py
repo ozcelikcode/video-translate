@@ -23,6 +23,16 @@ class FullRunArtifacts:
     m3_closure_report_json: Path | None
 
 
+def _ensure_non_mock_tts_backend_for_final_flow(backend_name: str) -> None:
+    normalized = backend_name.strip().lower()
+    if normalized == "mock":
+        raise RuntimeError(
+            "Final dubbing flow cannot run with tts.backend='mock'. "
+            "Mock backend only produces test tones (beep). "
+            "Use tts.backend='espeak' (for example configs/profiles/gtx1650_i5_12500h.toml)."
+        )
+
+
 def run_full_dub_pipeline(
     *,
     source_url: str,
@@ -38,6 +48,7 @@ def run_full_dub_pipeline(
     max_candidates: int = 16,
 ) -> FullRunArtifacts:
     resolved_target_lang = (target_lang or config.translate.target_language).strip() or "tr"
+    _ensure_non_mock_tts_backend_for_final_flow(config.tts.backend)
 
     preflight_report = run_preflight(
         yt_dlp_bin=config.tools.yt_dlp,

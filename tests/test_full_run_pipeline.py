@@ -1,6 +1,8 @@
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 from video_translate.models import M1Artifacts
 from video_translate.pipeline.full_run import run_full_dub_pipeline
 from video_translate.pipeline.m2 import M2Artifacts
@@ -12,7 +14,7 @@ def _fake_config() -> SimpleNamespace:
     return SimpleNamespace(
         tools=SimpleNamespace(yt_dlp="yt-dlp", ffmpeg="ffmpeg"),
         translate=SimpleNamespace(backend="mock", target_language="tr"),
-        tts=SimpleNamespace(backend="mock", espeak_bin="espeak"),
+        tts=SimpleNamespace(backend="espeak", espeak_bin="espeak"),
     )
 
 
@@ -26,8 +28,8 @@ def _fake_preflight() -> PreflightReport:
         transformers_available=None,
         sentencepiece_available=None,
         torch_available=None,
-        tts_backend="mock",
-        espeak=None,
+        tts_backend="espeak",
+        espeak=ToolCheck(name="espeak", command="espeak", path="espeak"),
     )
 
 
@@ -202,3 +204,16 @@ def test_run_full_dub_pipeline_with_m3_closure(tmp_path: Path, monkeypatch) -> N
 
     assert artifacts.run_root == run_root
     assert artifacts.m3_closure_report_json == closure_report
+
+
+def test_run_full_dub_pipeline_rejects_mock_tts_backend() -> None:
+    bad_config = SimpleNamespace(
+        tools=SimpleNamespace(yt_dlp="yt-dlp", ffmpeg="ffmpeg"),
+        translate=SimpleNamespace(backend="mock", target_language="tr"),
+        tts=SimpleNamespace(backend="mock", espeak_bin="espeak"),
+    )
+    with pytest.raises(RuntimeError, match="tts.backend='mock'"):
+        run_full_dub_pipeline(
+            source_url="https://www.youtube.com/watch?v=abc123",
+            config=bad_config,
+        )

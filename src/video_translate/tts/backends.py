@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import shutil
 import wave
 from dataclasses import dataclass
 from pathlib import Path
@@ -137,6 +138,26 @@ class EspeakTTSBackend(TTSBackend):
         return duration
 
 
+def _resolve_espeak_bin(configured_bin: str) -> str:
+    configured = configured_bin.strip() or "espeak"
+    candidates = [configured]
+    lowered = configured.lower()
+    if lowered == "espeak":
+        candidates.append("espeak-ng")
+    elif lowered == "espeak-ng":
+        candidates.append("espeak")
+
+    seen: set[str] = set()
+    for candidate in candidates:
+        key = candidate.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        if shutil.which(candidate):
+            return candidate
+    return configured
+
+
 def build_tts_backend(config: TTSConfig) -> TTSBackend:
     backend = config.backend.strip().lower()
     if backend == "mock":
@@ -146,7 +167,7 @@ def build_tts_backend(config: TTSConfig) -> TTSBackend:
         )
     if backend == "espeak":
         return EspeakTTSBackend(
-            espeak_bin=config.espeak_bin,
+            espeak_bin=_resolve_espeak_bin(config.espeak_bin),
             voice=config.espeak_voice,
             speed_wpm=config.espeak_speed_wpm,
             pitch=config.espeak_pitch,

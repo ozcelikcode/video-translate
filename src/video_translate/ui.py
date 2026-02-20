@@ -1,11 +1,14 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import json
 import mimetypes
+import threading
+import uuid
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 from urllib.parse import parse_qs, quote, urlparse
 
 from video_translate.config import load_config
@@ -19,6 +22,24 @@ from video_translate.preflight import preflight_errors, run_preflight
 
 UI_VERSION = "2026-02-20-final-mp4-downloads"
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+MAX_UI_JOB_HISTORY = 200
+
+
+@dataclass
+class UIJob:
+    job_id: str
+    status: str
+    progress_percent: int
+    phase: str
+    created_at_utc: str
+    updated_at_utc: str
+    result: dict[str, Any] | None = None
+    error: str | None = None
+
+
+JOB_STORE: dict[str, UIJob] = {}
+JOB_LOCK = threading.Lock()
+ProgressHook = Callable[[int, str], None]
 
 
 @dataclass(frozen=True)
@@ -87,6 +108,34 @@ def _resolve_download_path(raw_path: str) -> Path:
     if not resolved.exists() or not resolved.is_file():
         raise FileNotFoundError(f"Download file not found: {resolved}")
     return resolved
+
+
+def _utc_now_iso() -> str:
+    return datetime.now(tz=UTC).isoformat()
+
+
+def _clamp_percent(percent: int) -> int:
+    if percent < 0:
+        return 0
+    if percent > 100:
+        return 100
+    return int(percent)
+
+
+def _notify_progress(progress_hook: ProgressHook | None, percent: int, phase: str) -> None:
+    if progress_hook is None:
+        return
+    progress_hook(_clamp_percent(percent), phase.strip() or "Calisiyor...")
+
+
+def _ensure_non_mock_tts_backend_for_final_flow(backend_name: str) -> None:
+    normalized = backend_name.strip().lower()
+    if normalized == "mock":
+        raise RuntimeError(
+            "YouTube final teslim akisi tts.backend='mock' ile calisamaz. "
+            "Mock backend sadece test tonu (beep) uretir. "
+            "Lutfen tts.backend='espeak' kullanin (ornek: configs/profiles/gtx1650_i5_12500h.toml)."
+        )
 
 
 def execute_m3_run(request: UIM3Request) -> dict[str, Any]:
@@ -164,14 +213,19 @@ def execute_m3_run(request: UIM3Request) -> dict[str, Any]:
     }
 
 
-def execute_youtube_dub_run(request: UIYoutubeRequest) -> dict[str, Any]:
+def execute_youtube_dub_run(
+    request: UIYoutubeRequest,
+    progress_hook: ProgressHook | None = None,
+) -> dict[str, Any]:
     source_url = request.source_url.strip()
     if not source_url:
         raise ValueError("source_url is required.")
     if not request.run_m3:
         raise ValueError("M3 must stay enabled for final Turkish MP4 output.")
 
+    _notify_progress(progress_hook, 5, "On kontroller hazirlaniyor...")
     config = load_config(request.config_path)
+    _ensure_non_mock_tts_backend_for_final_flow(config.tts.backend)
     target_lang = request.target_lang.strip() or config.translate.target_language
     preflight_report = run_preflight(
         yt_dlp_bin=config.tools.yt_dlp,
@@ -185,7 +239,9 @@ def execute_youtube_dub_run(request: UIYoutubeRequest) -> dict[str, Any]:
     issues = preflight_errors(preflight_report)
     if issues:
         raise RuntimeError("Preflight failed: " + " | ".join(issues))
+    _notify_progress(progress_hook, 12, "On kontroller tamamlandi.")
 
+    _notify_progress(progress_hook, 18, "M1 basladi: indirme + ASR...")
     m1_artifacts = run_m1_pipeline(
         source_url=source_url,
         config=config,
@@ -194,16 +250,19 @@ def execute_youtube_dub_run(request: UIYoutubeRequest) -> dict[str, Any]:
         emit_srt=request.emit_srt,
         preflight_report=preflight_report,
     )
+    _notify_progress(progress_hook, 38, "M1 tamamlandi.")
     run_root = m1_artifacts.run_root
     m2_input = run_root / "output" / "translate" / f"translation_input.en-{target_lang}.json"
     m2_output = run_root / "output" / "translate" / f"translation_output.en-{target_lang}.json"
     m2_qa = run_root / "output" / "qa" / "m2_qa_report.json"
     m2_manifest = run_root / "run_m2_manifest.json"
+    _notify_progress(progress_hook, 44, "M2 hazirligi basladi...")
     prepare_m2_translation_input(
         transcript_json_path=m1_artifacts.transcript_json,
         output_json_path=m2_input,
         target_language=target_lang,
     )
+    _notify_progress(progress_hook, 50, "M2 ceviri calisiyor...")
     m2_artifacts = run_m2_pipeline(
         translation_input_json_path=m2_input,
         output_json_path=m2_output,
@@ -212,12 +271,14 @@ def execute_youtube_dub_run(request: UIYoutubeRequest) -> dict[str, Any]:
         config=config,
         target_language_override=target_lang,
     )
+    _notify_progress(progress_hook, 64, "M2 tamamlandi.")
 
     m2_payload = {
         "qa_report_json": _to_ui_path(m2_artifacts.qa_report_json),
         "run_manifest_json": _to_ui_path(m2_artifacts.run_manifest_json),
     }
     m3_input = run_root / "output" / "tts" / f"tts_input.{target_lang}.json"
+    _notify_progress(progress_hook, 70, "M3 hazirligi basladi...")
     prepare_m3_tts_input(
         translation_output_json_path=m2_artifacts.translation_output_json,
         output_json_path=m3_input,
@@ -226,6 +287,7 @@ def execute_youtube_dub_run(request: UIYoutubeRequest) -> dict[str, Any]:
     m3_output = run_root / "output" / "tts" / f"tts_output.{target_lang}.json"
     m3_qa = run_root / "output" / "qa" / "m3_qa_report.json"
     m3_manifest = run_root / "run_m3_manifest.json"
+    _notify_progress(progress_hook, 76, "M3 TTS dublaj uretiliyor...")
     m3_artifacts = run_m3_pipeline(
         tts_input_json_path=m3_input,
         output_json_path=m3_output,
@@ -233,6 +295,7 @@ def execute_youtube_dub_run(request: UIYoutubeRequest) -> dict[str, Any]:
         run_manifest_json_path=m3_manifest,
         config=config,
     )
+    _notify_progress(progress_hook, 90, "Final MP4 teslimi hazirlaniyor...")
 
     selected_downloads_dir = request.downloads_dir or Path("downloads")
     delivery = deliver_final_video(
@@ -244,6 +307,7 @@ def execute_youtube_dub_run(request: UIYoutubeRequest) -> dict[str, Any]:
         downloads_root=selected_downloads_dir,
         cleanup_intermediate=request.cleanup_intermediate,
     )
+    _notify_progress(progress_hook, 100, "Final Turkce dublajli video hazir.")
 
     m3_payload: dict[str, Any] = {
         "qa_report_json": _to_ui_path(m3_artifacts.qa_report_json),
@@ -272,6 +336,124 @@ def execute_youtube_dub_run(request: UIYoutubeRequest) -> dict[str, Any]:
         },
     }
     return result
+
+
+def _job_to_payload(job: UIJob) -> dict[str, Any]:
+    return {
+        "ok": True,
+        "job_id": job.job_id,
+        "status": job.status,
+        "progress_percent": job.progress_percent,
+        "phase": job.phase,
+        "created_at_utc": job.created_at_utc,
+        "updated_at_utc": job.updated_at_utc,
+        "error": job.error,
+        "result": job.result,
+    }
+
+
+def _trim_job_history_unlocked() -> None:
+    if len(JOB_STORE) <= MAX_UI_JOB_HISTORY:
+        return
+    ordered = sorted(JOB_STORE.values(), key=lambda item: item.created_at_utc)
+    remove_count = len(JOB_STORE) - MAX_UI_JOB_HISTORY
+    for item in ordered[:remove_count]:
+        JOB_STORE.pop(item.job_id, None)
+
+
+def _create_job() -> UIJob:
+    now = _utc_now_iso()
+    job = UIJob(
+        job_id=uuid.uuid4().hex,
+        status="queued",
+        progress_percent=0,
+        phase="Kuyruga alindi.",
+        created_at_utc=now,
+        updated_at_utc=now,
+    )
+    with JOB_LOCK:
+        JOB_STORE[job.job_id] = job
+        _trim_job_history_unlocked()
+    return job
+
+
+def _get_job(job_id: str) -> UIJob | None:
+    with JOB_LOCK:
+        return JOB_STORE.get(job_id)
+
+
+def _update_job(
+    *,
+    job_id: str,
+    status: str | None = None,
+    progress_percent: int | None = None,
+    phase: str | None = None,
+    result: dict[str, Any] | None = None,
+    error: str | None = None,
+) -> UIJob | None:
+    with JOB_LOCK:
+        current = JOB_STORE.get(job_id)
+        if current is None:
+            return None
+        updated = UIJob(
+            job_id=current.job_id,
+            status=status or current.status,
+            progress_percent=(
+                _clamp_percent(progress_percent)
+                if progress_percent is not None
+                else current.progress_percent
+            ),
+            phase=phase or current.phase,
+            created_at_utc=current.created_at_utc,
+            updated_at_utc=_utc_now_iso(),
+            result=result if result is not None else current.result,
+            error=error,
+        )
+        JOB_STORE[job_id] = updated
+        return updated
+
+
+def _run_youtube_job(job_id: str, request: UIYoutubeRequest) -> None:
+    _update_job(job_id=job_id, status="running", progress_percent=2, phase="Islem baslatiliyor...")
+
+    def _progress(percent: int, phase: str) -> None:
+        _update_job(
+            job_id=job_id,
+            status="running",
+            progress_percent=percent,
+            phase=phase,
+        )
+
+    try:
+        result = execute_youtube_dub_run(request, progress_hook=_progress)
+    except Exception as exc:  # noqa: BLE001
+        _update_job(
+            job_id=job_id,
+            status="failed",
+            progress_percent=100,
+            phase="Hata",
+            error=str(exc),
+        )
+        return
+    _update_job(
+        job_id=job_id,
+        status="completed",
+        progress_percent=100,
+        phase="Tamamlandi.",
+        result=result,
+        error=None,
+    )
+
+
+def start_youtube_job(request: UIYoutubeRequest) -> dict[str, Any]:
+    job = _create_job()
+    worker = threading.Thread(
+        target=_run_youtube_job,
+        args=(job.job_id, request),
+        daemon=True,
+    )
+    worker.start()
+    return _job_to_payload(job)
 
 
 def _html_page() -> str:
@@ -399,6 +581,20 @@ def _html_page() -> str:
       text-decoration: none;
     }
     .downloads a:hover { text-decoration: underline; }
+    .progress-track {
+      width: 100%;
+      height: 12px;
+      border-radius: 999px;
+      background: #ece7df;
+      overflow: hidden;
+      border: 1px solid var(--line);
+    }
+    .progress-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #0f766e, #14b8a6);
+      transition: width 220ms ease;
+    }
   </style>
 </head>
 <body>
@@ -456,6 +652,10 @@ video-translate run-dub --url "https://www.youtube.com/watch?v=VIDEO_ID" --confi
         <button id="youtubeRunBtn">YouTube'dan Dublaj Baslat</button>
       </div>
       <div class="panel"><pre id="ytStatus">Hazir.</pre></div>
+      <div class="panel">
+        <div class="progress-track"><div id="ytProgressFill" class="progress-fill"></div></div>
+        <pre id="ytProgressMeta">Ilerleme: %0 - Hazir.</pre>
+      </div>
       <div class="panel"><pre id="ytOutput"></pre></div>
       <div class="panel"><pre id="ytOutputDir">Cikti klasoru: -</pre></div>
       <div class="panel">
@@ -463,7 +663,7 @@ video-translate run-dub --url "https://www.youtube.com/watch?v=VIDEO_ID" --confi
         <ul id="ytDownloads" class="downloads"></ul>
       </div>
       <hr style="border:0;border-top:1px solid var(--line);margin:14px 0;" />
-      <p>Gelişmis M3 araci (opsiyonel, mevcut run-root uzerinden):</p>
+      <p>Gelismis M3 araci (opsiyonel, mevcut run-root uzerinden):</p>
       <div class="grid">
         <div class="field">
           <label>Run Root</label>
@@ -508,10 +708,49 @@ video-translate run-dub --url "https://www.youtube.com/watch?v=VIDEO_ID" --confi
     const ytOutputEl = document.getElementById("ytOutput");
     const ytOutputDirEl = document.getElementById("ytOutputDir");
     const ytDownloadsEl = document.getElementById("ytDownloads");
+    const ytProgressFillEl = document.getElementById("ytProgressFill");
+    const ytProgressMetaEl = document.getElementById("ytProgressMeta");
     const m3OutputDirEl = document.getElementById("m3OutputDir");
     const m3DownloadsEl = document.getElementById("m3Downloads");
     const youtubeRunBtn = document.getElementById("youtubeRunBtn");
     const clearBtn = document.getElementById("clearBtn");
+    const JOB_POLL_INTERVAL_MS = 1200;
+
+    let activeYoutubeJobId = null;
+    let activeYoutubeJobPollTimer = null;
+
+    function clampPercent(rawValue) {
+      const numeric = Number.parseInt(String(rawValue), 10);
+      if (Number.isNaN(numeric) || numeric < 0) {
+        return 0;
+      }
+      if (numeric > 100) {
+        return 100;
+      }
+      return numeric;
+    }
+
+    function setYoutubeProgress(percent, phase) {
+      const safePercent = clampPercent(percent);
+      const safePhase = (phase || "Hazir.").trim() || "Hazir.";
+      ytProgressFillEl.style.width = safePercent + "%";
+      ytProgressMetaEl.textContent = "Ilerleme: %" + safePercent + " - " + safePhase;
+    }
+
+    function stopYoutubePolling() {
+      if (activeYoutubeJobPollTimer !== null) {
+        window.clearTimeout(activeYoutubeJobPollTimer);
+        activeYoutubeJobPollTimer = null;
+      }
+      activeYoutubeJobId = null;
+    }
+
+    function scheduleYoutubePoll(jobId) {
+      activeYoutubeJobPollTimer = window.setTimeout(() => {
+        void pollYoutubeJob(jobId);
+      }, JOB_POLL_INTERVAL_MS);
+    }
+
     function renderOutputDir(element, payload) {
       if (payload && payload.output_dir) {
         element.textContent = "Cikti klasoru: " + payload.output_dir;
@@ -523,9 +762,11 @@ video-translate run-dub --url "https://www.youtube.com/watch?v=VIDEO_ID" --confi
       }
       element.textContent = "Cikti klasoru: -";
     }
+
     function clearDownloadList(listEl) {
       listEl.innerHTML = "";
     }
+
     function renderDownloadList(listEl, files) {
       clearDownloadList(listEl);
       if (!Array.isArray(files) || files.length === 0) {
@@ -544,21 +785,99 @@ video-translate run-dub --url "https://www.youtube.com/watch?v=VIDEO_ID" --confi
         listEl.appendChild(item);
       });
     }
+
+    function setYoutubeRunningState(percent, phase) {
+      setYoutubeProgress(percent, phase);
+      ytStatusEl.textContent = "YouTube akisi calisiyor... %" + clampPercent(percent);
+      ytStatusEl.classList.remove("err");
+    }
+
+    function renderYoutubeResult(payload) {
+      ytStatusEl.textContent = "Final Turkce dublajli video hazir.";
+      ytStatusEl.classList.remove("err");
+      ytOutputEl.textContent = JSON.stringify(payload, null, 2);
+      renderOutputDir(ytOutputDirEl, payload);
+      renderDownloadList(ytDownloadsEl, payload.downloadables);
+      if (payload.run_root) {
+        document.getElementById("runRoot").value = payload.run_root;
+      }
+    }
+
+    async function pollYoutubeJob(jobId) {
+      if (activeYoutubeJobId !== jobId) {
+        return;
+      }
+      try {
+        const res = await fetch("/job-status?job_id=" + encodeURIComponent(jobId), {
+          method: "GET",
+          cache: "no-store",
+        });
+        const payload = await res.json();
+        if (!res.ok || !payload.ok) {
+          throw new Error(payload.error || ("HTTP " + res.status));
+        }
+
+        setYoutubeProgress(payload.progress_percent, payload.phase);
+
+        if (payload.status === "completed") {
+          stopYoutubePolling();
+          youtubeRunBtn.disabled = false;
+          if (!payload.result || !payload.result.ok) {
+            throw new Error("Job tamamlandi ama sonuc payload'i gecersiz.");
+          }
+          renderYoutubeResult(payload.result);
+          return;
+        }
+
+        if (payload.status === "failed") {
+          stopYoutubePolling();
+          youtubeRunBtn.disabled = false;
+          ytStatusEl.textContent = "YouTube akisinda hata olustu.";
+          ytStatusEl.classList.add("err");
+          ytOutputEl.textContent = payload.error || "Bilinmeyen hata.";
+          renderOutputDir(ytOutputDirEl, null);
+          renderDownloadList(ytDownloadsEl, []);
+          return;
+        }
+
+        setYoutubeRunningState(payload.progress_percent, payload.phase);
+      } catch (err) {
+        stopYoutubePolling();
+        youtubeRunBtn.disabled = false;
+        ytStatusEl.textContent = "YouTube akisinda izleme hatasi olustu.";
+        ytStatusEl.classList.add("err");
+        ytOutputEl.textContent = String(err);
+        renderOutputDir(ytOutputDirEl, null);
+        renderDownloadList(ytDownloadsEl, []);
+        return;
+      }
+      scheduleYoutubePoll(jobId);
+    }
+
     renderDownloadList(ytDownloadsEl, []);
     renderDownloadList(m3DownloadsEl, []);
+    setYoutubeProgress(0, "Hazir.");
+
     clearBtn.addEventListener("click", () => {
+      stopYoutubePolling();
+      youtubeRunBtn.disabled = false;
+
       statusEl.textContent = "Temizlendi.";
       statusEl.classList.remove("err");
       outputEl.textContent = "";
       renderOutputDir(m3OutputDirEl, null);
       renderDownloadList(m3DownloadsEl, []);
+
       ytStatusEl.textContent = "Temizlendi.";
       ytStatusEl.classList.remove("err");
       ytOutputEl.textContent = "";
       renderOutputDir(ytOutputDirEl, null);
       renderDownloadList(ytDownloadsEl, []);
+      setYoutubeProgress(0, "Hazir.");
     });
+
     youtubeRunBtn.addEventListener("click", async () => {
+      stopYoutubePolling();
       const body = new URLSearchParams();
       body.set("source_url", document.getElementById("sourceUrl").value.trim());
       body.set("config_path", document.getElementById("configPath").value.trim());
@@ -569,8 +888,8 @@ video-translate run-dub --url "https://www.youtube.com/watch?v=VIDEO_ID" --confi
       body.set("target_lang", document.getElementById("ytTargetLang").value.trim());
       body.set("run_m3", document.getElementById("ytRunM3").checked ? "1" : "0");
       body.set("cleanup_intermediate", document.getElementById("cleanupIntermediate").checked ? "1" : "0");
-      ytStatusEl.textContent = "YouTube akisi calisiyor...";
-      ytStatusEl.classList.remove("err");
+
+      setYoutubeRunningState(0, "Islem baslatiliyor...");
       ytOutputEl.textContent = "";
       renderOutputDir(ytOutputDirEl, null);
       clearDownloadList(ytDownloadsEl);
@@ -581,23 +900,37 @@ video-translate run-dub --url "https://www.youtube.com/watch?v=VIDEO_ID" --confi
         if (!res.ok || !payload.ok) {
           throw new Error(payload.error || ("HTTP " + res.status));
         }
-        ytStatusEl.textContent = "Final Turkce dublajli video hazir.";
-        ytOutputEl.textContent = JSON.stringify(payload, null, 2);
-        renderOutputDir(ytOutputDirEl, payload);
-        renderDownloadList(ytDownloadsEl, payload.downloadables);
-        if (payload.run_root) {
-          document.getElementById("runRoot").value = payload.run_root;
+
+        if (payload.job_id) {
+          activeYoutubeJobId = payload.job_id;
+          setYoutubeRunningState(payload.progress_percent, payload.phase);
+          ytOutputEl.textContent = JSON.stringify(
+            {
+              job_id: payload.job_id,
+              status: payload.status,
+              created_at_utc: payload.created_at_utc,
+            },
+            null,
+            2
+          );
+          scheduleYoutubePoll(payload.job_id);
+          return;
         }
+
+        setYoutubeProgress(100, "Tamamlandi.");
+        renderYoutubeResult(payload);
+        youtubeRunBtn.disabled = false;
       } catch (err) {
+        stopYoutubePolling();
+        youtubeRunBtn.disabled = false;
         ytStatusEl.textContent = "YouTube akisinda hata olustu.";
         ytStatusEl.classList.add("err");
         ytOutputEl.textContent = String(err);
         renderOutputDir(ytOutputDirEl, null);
         renderDownloadList(ytDownloadsEl, []);
-      } finally {
-        youtubeRunBtn.disabled = false;
       }
     });
+
     runBtn.addEventListener("click", async () => {
       const body = new URLSearchParams();
       body.set("run_root", document.getElementById("runRoot").value.trim());
@@ -651,6 +984,18 @@ def _build_handler() -> type[BaseHTTPRequestHandler]:
                     return
                 self._send_file(download_path)
                 return
+            if request_url.path == "/job-status":
+                form = parse_qs(request_url.query)
+                job_id = _pick(form, "job_id", "")
+                if not job_id:
+                    self._send_json(400, {"ok": False, "error": "job_id is required."})
+                    return
+                job = _get_job(job_id)
+                if job is None:
+                    self._send_json(404, {"ok": False, "error": f"job not found: {job_id}"})
+                    return
+                self._send_json(200, _job_to_payload(job))
+                return
             if request_url.path != "/":
                 self._send_json(404, {"ok": False, "error": "Not found"})
                 return
@@ -694,7 +1039,7 @@ def _build_handler() -> type[BaseHTTPRequestHandler]:
                         run_m3=_pick(form, "run_m3", "1") == "1",
                         cleanup_intermediate=_pick(form, "cleanup_intermediate", "1") == "1",
                     )
-                    result = execute_youtube_dub_run(request)
+                    result = start_youtube_job(request)
             except Exception as exc:  # noqa: BLE001
                 self._send_json(400, {"ok": False, "error": str(exc)})
                 return
@@ -769,3 +1114,4 @@ def run_ui_server(host: str, port: int) -> None:
         server.serve_forever(poll_interval=0.2)
     finally:
         server.server_close()
+

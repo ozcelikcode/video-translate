@@ -4,7 +4,7 @@
 Proje v1 kapanis durumu: tek komutla uctan uca akisi calisan, QA gate destekli M1->M2->M3 dublaj sistemi.
 
 ## Handoff Snapshot (2026-02-20)
-- Son test durumu: `python -m pytest -q` -> `70 passed` (2026-02-20).
+- Son test durumu: `python -m pytest -q` -> `74 passed` (2026-02-20).
 - CLI komutlari:
   - `doctor`
   - `run-m1`
@@ -244,6 +244,34 @@ Proje v1 kapanis durumu: tek komutla uctan uca akisi calisan, QA gate destekli M
   - UI indirilebilir liste yalniz final MP4'e indirgenir
   - UI build etiketi: `2026-02-20-final-mp4-downloads`
   - testler: `tests/test_delivery.py`, `tests/test_ui.py`
+- UI YouTube ilerleme gorunurlugu guclendirildi:
+  - `POST /run-youtube-dub` cevabi asenkron job payload'i (`job_id`, `status`, `progress_percent`, `phase`) doner.
+  - `GET /job-status?job_id=...` polling ile canli durum izlenir.
+  - UI'da ilerleme cubugu + `%` metni + faz metni (M1/M2/M3/final) anlik guncellenir.
+  - test guncellemesi: `tests/test_ui.py` YouTube progress assertleri.
+- Son dogrulama:
+  - `python -m pytest -q` -> `70 passed` (2026-02-20).
+- TTS beep kok nedeni kapatildi:
+  - Kullanim profillerinde `tts.backend = mock` oldugu icin final cikti test tonu (diiit/duuut) uretiyordu.
+  - Profiller gercek sese alindi:
+    - `configs/profiles/gtx1650_i5_12500h.toml`
+    - `configs/profiles/gtx1650_fast.toml`
+    - `configs/profiles/gtx1650_strict.toml`
+    - hepsi `tts.backend = "espeak"`
+  - Final teslim guvencesi eklendi:
+    - `pipeline.full_run.run_full_dub_pipeline` mock backend ile calismaz
+    - `ui.execute_youtube_dub_run` mock backend ile calismaz
+    - net hata mesaji ile `espeak` profiline yonlendirir
+  - testler:
+    - `tests/test_full_run_pipeline.py::test_run_full_dub_pipeline_rejects_mock_tts_backend`
+    - `tests/test_ui.py::test_execute_youtube_dub_run_rejects_mock_tts_backend`
+  - Son dogrulama: `python -m pytest -q` -> `74 passed` (2026-02-20).
+- eSpeak command fallback guclendirildi:
+  - Preflight, `espeak` yoksa otomatik `espeak-ng` komutunu da dener.
+  - TTS backend build asamasinda da ayni fallback uygulanir (`espeak` <-> `espeak-ng`).
+  - testler:
+    - `tests/test_preflight.py::test_run_preflight_espeak_backend_accepts_espeak_ng_fallback`
+    - `tests/test_tts_backends.py::test_build_tts_backend_espeak_prefers_espeak_ng_when_espeak_missing`
 
 ## Aktif Kararlar
 - Gelistirme `M1 -> M5` kademeleriyle ilerleyecek.
