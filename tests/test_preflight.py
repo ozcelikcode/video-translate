@@ -88,6 +88,8 @@ def test_run_preflight_espeak_backend_checks_binary(monkeypatch: MonkeyPatch) ->
 def test_run_preflight_piper_backend_checks_binary_and_model(
     monkeypatch: MonkeyPatch, tmp_path: Path
 ) -> None:
+    missing_model_path = tmp_path / "models" / "piper" / "missing.onnx"
+
     def fake_which(command: str) -> str | None:
         if command in {"yt-dlp", "ffmpeg"}:
             return f"/bin/{command}"
@@ -105,7 +107,7 @@ def test_run_preflight_piper_backend_checks_binary_and_model(
         ffmpeg_bin="ffmpeg",
         tts_backend="piper",
         piper_bin="piper",
-        piper_model_path=Path("models/piper/tr_TR-dfki-medium.onnx"),
+        piper_model_path=missing_model_path,
         check_tts_backend=True,
     )
     errors = preflight_errors(report)

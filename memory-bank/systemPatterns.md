@@ -31,6 +31,9 @@ Pipeline tabanli, moduler, asamali genisletilebilir bir mimari.
 - Komut timeout dayanimi:
   - `utils.run_command` timeout parametresi destekler
   - `ingest.youtube` ve `ingest.audio` dis komutlari timeout ile calistirilir
+- Komut encoding dayanimi:
+  - `utils.run_command` tum `subprocess` cagrilarini UTF-8 text modunda calistirir (`encoding="utf-8"`, `errors="replace"`).
+  - Amaç: Windows locale (`cp1252`) kaynakli non-ASCII stdin yazim hatalarini (UnicodeEncodeError) engellemek.
 
 ## Uctan Uca Tek Komut Akisi
 - `cli.run-dub` -> `pipeline.full_run.run_full_dub_pipeline`

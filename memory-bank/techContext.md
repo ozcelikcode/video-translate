@@ -38,6 +38,9 @@
 - ASR: `faster-whisper` (yerel model)
 - Ingest: harici komutlar (`yt-dlp`, `ffmpeg`)
 - Dis komut katmani: `run_command(..., timeout_seconds=...)` timeout destekler
+- Dis komut katmani UTF-8 text mode kullanir:
+  - `run_command(..., input_text=...)` cagrilarinda `encoding="utf-8"` + `errors="replace"`
+  - Windows `cp1252` locale kaynakli Unicode encode kirilmalarini engeller
 - On kontrol: `doctor` komutu ile yerel bagimlilik denetimi
 - M2 hazirlik: `prepare-m2` ile ceviri giris sozlesmesi uretimi
 - Uctan uca tek komut: `run-dub` (URL -> M1 -> M2 -> M3)
@@ -156,7 +159,7 @@
   - Opsiyonlar: `--skip-install`, `--no-ui`
 - Piper komut cozumleme:
   - PATH disinda repo ici `.venv/Scripts/piper.exe` ve `.venv/bin/piper` fallback'i desteklenir.
-- Son tam test sonucu: `85 passed` (2026-02-20)
+- Son tam test sonucu: `87 passed` (2026-02-20)
 
 ## Handoff Teknik Notlari
 - M3 icin harici API kullanilmiyor; mevcut backend tamamen yerel dosya uretimi yapiyor.

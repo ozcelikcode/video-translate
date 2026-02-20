@@ -4,7 +4,7 @@
 Proje v1 kapanis durumu: tek komutla uctan uca akisi calisan, QA gate destekli M1->M2->M3 dublaj sistemi.
 
 ## Handoff Snapshot (2026-02-20)
-- Son test durumu: `python -m pytest -q` -> `85 passed` (2026-02-20).
+- Son test durumu: `python -m pytest -q` -> `87 passed` (2026-02-20).
 - CLI komutlari:
   - `doctor`
   - `run-m1`
@@ -312,6 +312,13 @@ Proje v1 kapanis durumu: tek komutla uctan uca akisi calisan, QA gate destekli M
   - `configs/profiles/gtx1650_piper.toml` icinde `tts.piper_bin` varsayilani `.venv/Scripts/piper.exe` yapildi (PATH bagimsiz).
   - `open_project.bat` kurulum akisi `.[dev,m2,tts_piper]` ile Piper bagimliliklarini kurar, model dosyalarini (`models/piper/tr_TR-dfki-medium.onnx` + `.json`) eksikse otomatik indirir ve doctor'u piper profiliyle calistirir.
   - Canli ortam dogrulamasi: `video-translate doctor --config configs/profiles/gtx1650_piper.toml` basarili.
+- Kritik UnicodeEncodeError duzeltmesi:
+  - kok neden: Windows `cp1252` locale altinda `subprocess.run(..., text=True, input=...)` stdin yazimi Turkce/Unicode metinde patliyordu.
+  - cozum: `utils.run_command` icinde `encoding="utf-8"` ve `errors="replace"` zorlandi.
+  - regresyon testleri eklendi:
+    - `tests/test_subprocess_utils.py::test_run_command_uses_utf8_text_mode`
+    - `tests/test_subprocess_utils.py::test_run_command_handles_non_ascii_input_text`
+  - canli smoke: `piper` komutu `input_text` ile (`gercekten iyi bir test`) basarili WAV uretimi dogrulandi.
 
 ## Aktif Kararlar
 - Gelistirme `M1 -> M5` kademeleriyle ilerleyecek.

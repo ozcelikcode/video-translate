@@ -181,6 +181,13 @@ Proje v1 (M1->M3) tamamlandi; uctan uca yerel ve API'siz dublaj akislari calisiy
   - `configs/profiles/gtx1650_piper.toml` PATH bagimsiz `tts.piper_bin = ".venv/Scripts/piper.exe"` kullaniyor.
   - `open_project.bat` Piper bagimliliklarini (`.[dev,m2,tts_piper]`) ve model dosyalarini otomatik hazirlar.
   - canli dogrulama: `video-translate doctor --config configs/profiles/gtx1650_piper.toml` basarili.
+- Kritik subprocess UnicodeEncodeError giderildi:
+  - kok neden: Windows `cp1252` locale'de `subprocess` stdin yazimi non-ASCII karakterde kiriliyordu.
+  - cozum: `src/video_translate/utils/subprocess_utils.py` icinde UTF-8 text mode zorlandi (`encoding="utf-8"`, `errors="replace"`).
+  - yeni testler:
+    - `tests/test_subprocess_utils.py::test_run_command_uses_utf8_text_mode`
+    - `tests/test_subprocess_utils.py::test_run_command_handles_non_ascii_input_text`
+  - canli smoke: piper ile `input_text` kullanarak WAV uretimi basarili.
 - Adlandirma disiplin karari netlestirildi:
   - uretim tarafinda `demo/test` adlari kullanilmaz
   - test kodlari yalnizca `tests/` altinda tutulur
@@ -195,6 +202,7 @@ Proje v1 (M1->M3) tamamlandi; uctan uca yerel ve API'siz dublaj akislari calisiy
 - Temel birim testleri genisletildi ve gecti.
 - Son test sonucu: `82 passed` (2026-02-20).
 - Son test sonucu (guncel): `85 passed` (2026-02-20).
+- Son test sonucu (guncel): `87 passed` (2026-02-20).
 
 ## Calisma Agaci Durumu (Handoff)
 - Commit edilmemis degisiklikler mevcut.
