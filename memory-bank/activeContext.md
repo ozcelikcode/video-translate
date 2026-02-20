@@ -319,6 +319,26 @@ Proje v1 kapanis durumu: tek komutla uctan uca akisi calisan, QA gate destekli M
     - `tests/test_subprocess_utils.py::test_run_command_uses_utf8_text_mode`
     - `tests/test_subprocess_utils.py::test_run_command_handles_non_ascii_input_text`
   - canli smoke: `piper` komutu `input_text` ile (`gercekten iyi bir test`) basarili WAV uretimi dogrulandi.
+- Piper Turkce telaffuz bozulma kok nedeni kapatildi (Windows):
+  - semptom: ses Turkce yerine bozuk/yanlis telaffuzlu cikiyor, bazi kosularda "ters" duyuluyordu.
+  - kok neden: Piper Windows launcher'i Python tabanli calistigi icin stdin bazen locale (`cp1252`) ile decode ediliyordu.
+  - cozum:
+    - `src/video_translate/utils/subprocess_utils.py` -> `run_command(..., env_overrides=...)` destegi eklendi.
+    - `src/video_translate/tts/backends.py` -> Piper cagrisi `PYTHONUTF8=1` ve `PYTHONIOENCODING=utf-8` ile zorlandi.
+  - dogrulama:
+    - testler: `tests/test_subprocess_utils.py`, `tests/test_tts_backends.py`
+    - toplam test: `python -m pytest -q` -> `88 passed` (2026-02-20)
+    - canli run: `runs/diag_utf8_piper_fix` (M2 Turkish metin + M3 piper sentez uyumu dogrulandi).
+- M2 hedef dil tutarlilik kontrolu eklendi:
+  - `src/video_translate/qa/m2_report.py`
+  - Yeni metrik bloku: `language_consistency_metrics`
+  - TR hedef dilinde, segmentlerin cogunlugu Turkce gorunmuyorsa `target_language_mismatch_suspected` quality flag'i uretilir.
+  - Yeni testler:
+    - `tests/test_m2_qa_report.py::test_build_m2_qa_report_flags_target_language_mismatch_for_tr`
+    - `tests/test_m2_qa_report.py::test_build_m2_qa_report_does_not_flag_language_mismatch_when_tr_text_present`
+  - Son test sonucu: `python -m pytest -q` -> `90 passed` (2026-02-20).
+- Glossary EN->TR terim listesi genisletildi:
+  - `configs/glossary.en-tr.json` icine `elephant/elephants/trunk/trunks` terimleri eklendi.
 
 ## Aktif Kararlar
 - Gelistirme `M1 -> M5` kademeleriyle ilerleyecek.

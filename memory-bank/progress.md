@@ -188,6 +188,28 @@ Proje v1 (M1->M3) tamamlandi; uctan uca yerel ve API'siz dublaj akislari calisiy
     - `tests/test_subprocess_utils.py::test_run_command_uses_utf8_text_mode`
     - `tests/test_subprocess_utils.py::test_run_command_handles_non_ascii_input_text`
   - canli smoke: piper ile `input_text` kullanarak WAV uretimi basarili.
+- Piper Turkce ses bozulma sorunu giderildi:
+  - kok neden: Piper Windows launcher stdin decode'u locale'e gore sapabiliyordu.
+  - cozum:
+    - `src/video_translate/utils/subprocess_utils.py`: `env_overrides` destegi eklendi
+    - `src/video_translate/tts/backends.py`: Piper cagrilarinda `PYTHONUTF8=1`, `PYTHONIOENCODING=utf-8`
+  - testler:
+    - `tests/test_subprocess_utils.py::test_run_command_passes_env_overrides`
+    - `tests/test_tts_backends.py::test_piper_backend_builds_command_and_writes_wav`
+  - dogrulama:
+    - hedef test: `14 passed`
+    - tam test: `python -m pytest -q` -> `88 passed` (2026-02-20)
+    - canli artefakt kontrolu: `runs/diag_utf8_piper_fix` (translation_output + tts_input Turkce unicode uyumlu)
+- M2 hedef dil tutarlilik kontrolu eklendi:
+  - `src/video_translate/qa/m2_report.py` icine `language_consistency_metrics` alani eklendi
+  - TR hedef dilinde, non-Turkce segment yogunlugu yuksekse
+    `target_language_mismatch_suspected` quality flag'i uretiliyor
+  - yeni testler:
+    - `tests/test_m2_qa_report.py::test_build_m2_qa_report_flags_target_language_mismatch_for_tr`
+    - `tests/test_m2_qa_report.py::test_build_m2_qa_report_does_not_flag_language_mismatch_when_tr_text_present`
+  - tam test sonucu: `python -m pytest -q` -> `90 passed` (2026-02-20)
+- Glossary terim kapsami genisletildi:
+  - `configs/glossary.en-tr.json` -> `elephant`, `elephants`, `trunk`, `trunks` terimleri eklendi.
 - Adlandirma disiplin karari netlestirildi:
   - uretim tarafinda `demo/test` adlari kullanilmaz
   - test kodlari yalnizca `tests/` altinda tutulur
@@ -203,6 +225,8 @@ Proje v1 (M1->M3) tamamlandi; uctan uca yerel ve API'siz dublaj akislari calisiy
 - Son test sonucu: `82 passed` (2026-02-20).
 - Son test sonucu (guncel): `85 passed` (2026-02-20).
 - Son test sonucu (guncel): `87 passed` (2026-02-20).
+- Son test sonucu (guncel): `88 passed` (2026-02-20).
+- Son test sonucu (guncel): `90 passed` (2026-02-20).
 
 ## Calisma Agaci Durumu (Handoff)
 - Commit edilmemis degisiklikler mevcut.

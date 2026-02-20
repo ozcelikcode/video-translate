@@ -179,7 +179,15 @@ class PiperTTSBackend(TTSBackend):
             command.extend(["--config", str(self.config_path)])
         if self.speaker_id is not None:
             command.extend(["--speaker", str(self.speaker_id)])
-        run_command(command, input_text=safe_text + "\n")
+        # Piper Windows launcher is a Python script; enforce UTF-8 stdin decoding.
+        run_command(
+            command,
+            input_text=safe_text + "\n",
+            env_overrides={
+                "PYTHONUTF8": "1",
+                "PYTHONIOENCODING": "utf-8",
+            },
+        )
         duration = _wav_duration_seconds(output_wav)
         return max(duration, self.min_segment_seconds)
 

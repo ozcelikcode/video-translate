@@ -45,6 +45,28 @@ def test_run_command_uses_utf8_text_mode(monkeypatch: Any) -> None:
     assert captured["input"] == "merhaba"
 
 
+def test_run_command_passes_env_overrides(monkeypatch: Any) -> None:
+    captured: dict[str, Any] = {}
+
+    def fake_run(*args: Any, **kwargs: Any) -> SimpleNamespace:
+        del args
+        captured["env"] = kwargs.get("env")
+        return SimpleNamespace(returncode=0, stderr="", stdout="")
+
+    monkeypatch.setattr("video_translate.utils.subprocess_utils.subprocess.run", fake_run)
+
+    result = run_command(
+        ["cmd", "/c", "echo"],
+        input_text="x",
+        env_overrides={"PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8"},
+    )
+    assert result.returncode == 0
+    env = captured["env"]
+    assert isinstance(env, dict)
+    assert env.get("PYTHONUTF8") == "1"
+    assert env.get("PYTHONIOENCODING") == "utf-8"
+
+
 def test_run_command_timeout_raises_command_execution_error(monkeypatch: Any) -> None:
     def fake_run(*args: Any, **kwargs: Any) -> SimpleNamespace:
         del args, kwargs

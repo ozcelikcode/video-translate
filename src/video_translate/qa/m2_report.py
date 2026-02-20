@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from statistics import mean
 from typing import Any
 
@@ -10,6 +11,42 @@ from video_translate.translate.glossary import contains_term
 
 _TERMINAL_PUNCTUATION = {".", "!", "?"}
 _PAUSE_PUNCTUATION = {",", ";", ":"}
+_WORD_PATTERN = re.compile(r"[A-Za-z\u00C7\u011E\u0130\u00D6\u015E\u00DC\u00E7\u011F\u0131\u00F6\u015F\u00FC']+")
+_TURKISH_CHARACTERS = set(
+    "\u00E7\u011F\u0131\u00F6\u015F\u00FC\u00C7\u011E\u0130\u00D6\u015E\u00DC"
+)
+_TURKISH_STOPWORDS = {
+    "ve",
+    "bir",
+    "bu",
+    "da",
+    "de",
+    "icin",
+    "ile",
+    "ama",
+    "gibi",
+    "cok",
+    "mi",
+    "mu",
+    "ne",
+    "nasil",
+    "evet",
+    "hayir",
+}
+_LANGUAGE_MISMATCH_RATIO_THRESHOLD = 0.50
+
+
+def _looks_like_turkish(text: str) -> bool:
+    normalized = text.strip()
+    if not normalized:
+        return True
+    if any(char in _TURKISH_CHARACTERS for char in normalized):
+        return True
+
+    words = [token.lower() for token in _WORD_PATTERN.findall(normalized)]
+    if not words:
+        return False
+    return any(word in _TURKISH_STOPWORDS for word in words)
 
 
 def _terminal_punctuation(text: str) -> str | None:
@@ -118,6 +155,32 @@ def build_m2_qa_report(
                             }
                         )
 
+    language_check_enabled = doc.target_language.strip().lower() == "tr"
+    non_target_like_segment_count = 0
+    non_target_like_segment_samples: list[dict[str, object]] = []
+    non_empty_target_segment_count = 0
+    if language_check_enabled:
+        for segment in doc.segments:
+            target_text = segment.target_text.strip()
+            if not target_text:
+                continue
+            non_empty_target_segment_count += 1
+            if _looks_like_turkish(target_text):
+                continue
+            non_target_like_segment_count += 1
+            if len(non_target_like_segment_samples) < 20:
+                non_target_like_segment_samples.append(
+                    {
+                        "segment_id": segment.id,
+                        "target_text": target_text,
+                    }
+                )
+    non_target_like_segment_ratio = (
+        non_target_like_segment_count / non_empty_target_segment_count
+        if non_empty_target_segment_count > 0
+        else 0.0
+    )
+
     quality_flags: list[str] = []
     if empty_target_count > 0:
         quality_flags.append("empty_target_segments_present")
@@ -134,6 +197,11 @@ def build_m2_qa_report(
         and (long_segment_missing_terminal_count > 0 or long_segment_excessive_pause_count > 0)
     ):
         quality_flags.append("long_segment_fluency_issue_present")
+    if (
+        language_check_enabled
+        and non_target_like_segment_ratio >= _LANGUAGE_MISMATCH_RATIO_THRESHOLD
+    ):
+        quality_flags.append("target_language_mismatch_suspected")
 
     return {
         "stage": "m2",
@@ -180,6 +248,15 @@ def build_m2_qa_report(
             "missed_term_count": missed_term_count,
             "match_ratio": (matched_term_count / expected_term_count) if expected_term_count > 0 else None,
             "miss_samples": term_miss_samples,
+        },
+        "language_consistency_metrics": {
+            "enabled": language_check_enabled,
+            "target_language": doc.target_language,
+            "non_empty_target_segment_count": non_empty_target_segment_count,
+            "non_target_like_segment_count": non_target_like_segment_count,
+            "non_target_like_segment_ratio": non_target_like_segment_ratio,
+            "mismatch_ratio_threshold": _LANGUAGE_MISMATCH_RATIO_THRESHOLD,
+            "samples": non_target_like_segment_samples,
         },
         "quality_flags": quality_flags,
     }

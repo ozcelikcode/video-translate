@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import subprocess
 from pathlib import Path
 
@@ -18,7 +19,13 @@ def run_command(
     cwd: Path | None = None,
     input_text: str | None = None,
     timeout_seconds: float | None = None,
+    env_overrides: dict[str, str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
+    run_env: dict[str, str] | None = None
+    if env_overrides:
+        run_env = os.environ.copy()
+        run_env.update(env_overrides)
+
     try:
         result = subprocess.run(
             command,
@@ -30,6 +37,7 @@ def run_command(
             errors="replace",
             input=input_text,
             timeout=timeout_seconds,
+            env=run_env,
         )
     except subprocess.TimeoutExpired as exc:
         timeout_label = (

@@ -41,6 +41,8 @@
 - Dis komut katmani UTF-8 text mode kullanir:
   - `run_command(..., input_text=...)` cagrilarinda `encoding="utf-8"` + `errors="replace"`
   - Windows `cp1252` locale kaynakli Unicode encode kirilmalarini engeller
+  - `run_command(..., env_overrides=...)` ile process-ozel environment set edilebilir
+  - Piper TTS cagrilarinda UTF-8 stdin icin `PYTHONUTF8=1` + `PYTHONIOENCODING=utf-8` zorlanir
 - On kontrol: `doctor` komutu ile yerel bagimlilik denetimi
 - M2 hazirlik: `prepare-m2` ile ceviri giris sozlesmesi uretimi
 - Uctan uca tek komut: `run-dub` (URL -> M1 -> M2 -> M3)
@@ -48,6 +50,10 @@
 - M2 benchmark: `benchmark-m2` ile profil karsilastirma
 - M2 glossary: `configs/glossary.en-tr.json` (kaynak terim -> hedef terim)
 - M2 QA: terminal noktalama, glossary eslesme ve uzun segment akicilik metrikleri
+- M2 QA dil tutarlilik metrikleri:
+  - `language_consistency_metrics.non_target_like_segment_count`
+  - `language_consistency_metrics.non_target_like_segment_ratio`
+  - olasi bayrak: `target_language_mismatch_suspected`
 - M2 QA long-segment config:
   - `translate.qa_check_long_segment_fluency`
   - `translate.qa_long_segment_word_threshold`
@@ -159,7 +165,7 @@
   - Opsiyonlar: `--skip-install`, `--no-ui`
 - Piper komut cozumleme:
   - PATH disinda repo ici `.venv/Scripts/piper.exe` ve `.venv/bin/piper` fallback'i desteklenir.
-- Son tam test sonucu: `87 passed` (2026-02-20)
+- Son tam test sonucu: `90 passed` (2026-02-20)
 
 ## Handoff Teknik Notlari
 - M3 icin harici API kullanilmiyor; mevcut backend tamamen yerel dosya uretimi yapiyor.

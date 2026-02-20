@@ -147,11 +147,16 @@ def test_piper_backend_builds_command_and_writes_wav(monkeypatch: pytest.MonkeyP
         min_segment_seconds=0.12,
     )
     output_wav = tmp_path / "seg_piper.wav"
-    captured_calls: list[tuple[list[str], str | None]] = []
+    captured_calls: list[tuple[list[str], str | None, dict[str, str] | None]] = []
 
-    def fake_run_command(command: list[str], cwd: Path | None = None, input_text: str | None = None) -> None:
+    def fake_run_command(
+        command: list[str],
+        cwd: Path | None = None,
+        input_text: str | None = None,
+        env_overrides: dict[str, str] | None = None,
+    ) -> None:
         del cwd
-        captured_calls.append((command, input_text))
+        captured_calls.append((command, input_text, env_overrides))
         mock_backend = MockTTSBackend(base_tone_hz=220, min_segment_seconds=0.12)
         mock_backend.synthesize_to_wav(
             text="merhaba",
@@ -171,13 +176,16 @@ def test_piper_backend_builds_command_and_writes_wav(monkeypatch: pytest.MonkeyP
     assert output_wav.exists()
     assert duration > 0.0
     assert captured_calls
-    command, input_text = captured_calls[-1]
+    command, input_text, env_overrides = captured_calls[-1]
     assert command[0] == "piper"
     assert "--model" in command
     assert "--output_file" in command
     assert "--speaker" in command
     assert input_text is not None
     assert "merhaba dunya" in input_text
+    assert env_overrides is not None
+    assert env_overrides.get("PYTHONUTF8") == "1"
+    assert env_overrides.get("PYTHONIOENCODING") == "utf-8"
 
 
 def test_espeak_backend_adaptive_rate_retries_until_tolerance(

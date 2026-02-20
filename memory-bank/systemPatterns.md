@@ -34,6 +34,8 @@ Pipeline tabanli, moduler, asamali genisletilebilir bir mimari.
 - Komut encoding dayanimi:
   - `utils.run_command` tum `subprocess` cagrilarini UTF-8 text modunda calistirir (`encoding="utf-8"`, `errors="replace"`).
   - Amaç: Windows locale (`cp1252`) kaynakli non-ASCII stdin yazim hatalarini (UnicodeEncodeError) engellemek.
+  - `run_command` ortam degisken override destegi de saglar (`env_overrides`).
+  - Piper sentez cagrilarinda `PYTHONUTF8=1` + `PYTHONIOENCODING=utf-8` zorlanir; boylece Piper stdin metni locale'e gore bozulmadan UTF-8 olarak okunur.
 
 ## Uctan Uca Tek Komut Akisi
 - `cli.run-dub` -> `pipeline.full_run.run_full_dub_pipeline`
@@ -68,11 +70,13 @@ Pipeline tabanli, moduler, asamali genisletilebilir bir mimari.
   - terminal noktalama
   - glossary terim eslesmesi
   - uzun segment akicilik heuristikleri (terminal noktalama eksigi + asiri duraklama noktalama)
+  - hedef dil tutarlilik heuristigi (TR hedefte non-Turkce segment yogunlugu)
 - M2 calisma manifesti: `run_m2_manifest.json` (timing + speed alanlari)
 - M2 QA acceptance gate:
   - QA raporundaki `quality_flags` -> whitelist disinda kalanlar `blocked_flags`
   - `qa_fail_on_flags=true` ise pipeline `RuntimeError` ile durur
   - `run_m2_manifest.json` icinde `qa_gate` sonucu yazilir
+  - yeni olasi bayrak: `target_language_mismatch_suspected`
 
 ## M2 Benchmark Akisi
 - `cli.benchmark-m2` -> `pipeline.m2_benchmark.run_m2_profile_benchmark`

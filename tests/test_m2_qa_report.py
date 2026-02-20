@@ -136,3 +136,104 @@ def test_build_m2_qa_report_long_segment_fluency_flags() -> None:
     flags = report["quality_flags"]
     assert isinstance(flags, list)
     assert "long_segment_fluency_issue_present" in flags
+
+
+def test_build_m2_qa_report_flags_target_language_mismatch_for_tr() -> None:
+    input_doc = parse_translation_input_document(
+        {
+            "schema_version": "1.0",
+            "stage": "m2_translation_input",
+            "generated_at_utc": "2026-02-16T10:00:00Z",
+            "source_language": "en",
+            "target_language": "tr",
+            "segment_count": 2,
+            "total_source_word_count": 6,
+            "segments": [
+                {
+                    "id": 0,
+                    "start": 0.0,
+                    "end": 1.0,
+                    "duration": 1.0,
+                    "source_text": "This is an example.",
+                    "source_word_count": 4,
+                },
+                {
+                    "id": 1,
+                    "start": 1.0,
+                    "end": 2.0,
+                    "duration": 1.0,
+                    "source_text": "It should be Turkish.",
+                    "source_word_count": 4,
+                },
+            ],
+        }
+    )
+    output_doc = build_translation_output_document(
+        input_doc=input_doc,
+        translated_texts=[
+            "This is still English.",
+            "Another English sentence.",
+        ],
+        backend="mock",
+    )
+
+    report = build_m2_qa_report(output_doc, _translate_config(), glossary={})
+    language_metrics = report["language_consistency_metrics"]
+    assert isinstance(language_metrics, dict)
+    assert language_metrics["enabled"] is True
+    assert language_metrics["non_target_like_segment_count"] == 2
+    assert language_metrics["non_target_like_segment_ratio"] == 1.0
+
+    flags = report["quality_flags"]
+    assert isinstance(flags, list)
+    assert "target_language_mismatch_suspected" in flags
+
+
+def test_build_m2_qa_report_does_not_flag_language_mismatch_when_tr_text_present() -> None:
+    input_doc = parse_translation_input_document(
+        {
+            "schema_version": "1.0",
+            "stage": "m2_translation_input",
+            "generated_at_utc": "2026-02-16T10:00:00Z",
+            "source_language": "en",
+            "target_language": "tr",
+            "segment_count": 2,
+            "total_source_word_count": 6,
+            "segments": [
+                {
+                    "id": 0,
+                    "start": 0.0,
+                    "end": 1.0,
+                    "duration": 1.0,
+                    "source_text": "This is an example.",
+                    "source_word_count": 4,
+                },
+                {
+                    "id": 1,
+                    "start": 1.0,
+                    "end": 2.0,
+                    "duration": 1.0,
+                    "source_text": "It should be Turkish.",
+                    "source_word_count": 4,
+                },
+            ],
+        }
+    )
+    output_doc = build_translation_output_document(
+        input_doc=input_doc,
+        translated_texts=[
+            "bu bir testtir.",
+            "ve gayet anlasilir bir metindir.",
+        ],
+        backend="mock",
+    )
+
+    report = build_m2_qa_report(output_doc, _translate_config(), glossary={})
+    language_metrics = report["language_consistency_metrics"]
+    assert isinstance(language_metrics, dict)
+    assert language_metrics["non_target_like_segment_count"] == 0
+    assert language_metrics["non_target_like_segment_ratio"] == 0.0
+
+    flags = report["quality_flags"]
+    assert isinstance(flags, list)
+    assert "target_language_mismatch_suspected" not in flags
