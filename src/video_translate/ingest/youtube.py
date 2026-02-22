@@ -5,17 +5,46 @@ from pathlib import Path
 from video_translate.models import DownloadResult
 from video_translate.utils.subprocess_utils import run_command
 
+SUPPORTED_VIDEO_HEIGHT_OPTIONS = (720, 1080, 1440, 2160)
 
-def build_yt_dlp_command(yt_dlp_bin: str, url: str, output_template: Path) -> list[str]:
-    return [
+
+def _validate_max_video_height(max_video_height: int | None) -> int | None:
+    if max_video_height is None:
+        return None
+    normalized = int(max_video_height)
+    if normalized not in SUPPORTED_VIDEO_HEIGHT_OPTIONS:
+        supported = ", ".join(str(value) for value in SUPPORTED_VIDEO_HEIGHT_OPTIONS)
+        raise ValueError(
+            f"Unsupported YouTube video height '{normalized}'. Supported values: {supported}."
+        )
+    return normalized
+
+
+def build_yt_dlp_command(
+    yt_dlp_bin: str,
+    url: str,
+    output_template: Path,
+    *,
+    max_video_height: int | None = None,
+) -> list[str]:
+    validated_height = _validate_max_video_height(max_video_height)
+    command = [
         yt_dlp_bin,
         "--no-playlist",
         "--no-progress",
         "--write-info-json",
         "--output",
         str(output_template),
-        url,
     ]
+    if validated_height is not None:
+        command.extend(
+            [
+                "--format",
+                f"bestvideo*[height<={validated_height}]+bestaudio/best[height<={validated_height}]",
+            ]
+        )
+    command.append(url)
+    return command
 
 
 def _discover_downloaded_media(input_dir: Path) -> Path:
@@ -37,10 +66,16 @@ def download_youtube_source(
     output_dir: Path,
     yt_dlp_bin: str,
     timeout_seconds: float | None = 3600.0,
+    max_video_height: int | None = None,
 ) -> DownloadResult:
     output_dir.mkdir(parents=True, exist_ok=True)
     output_template = output_dir / "source.%(ext)s"
-    command = build_yt_dlp_command(yt_dlp_bin=yt_dlp_bin, url=url, output_template=output_template)
+    command = build_yt_dlp_command(
+        yt_dlp_bin=yt_dlp_bin,
+        url=url,
+        output_template=output_template,
+        max_video_height=max_video_height,
+    )
     run_command(command, timeout_seconds=timeout_seconds)
 
     media_path = _discover_downloaded_media(output_dir)

@@ -13,6 +13,7 @@ from typing import Any, Callable
 from urllib.parse import parse_qs, quote, urlparse
 
 from video_translate.config import load_config
+from video_translate.ingest.youtube import SUPPORTED_VIDEO_HEIGHT_OPTIONS
 from video_translate.pipeline.delivery import deliver_final_video
 from video_translate.pipeline.m1 import run_m1_pipeline
 from video_translate.pipeline.m2 import run_m2_pipeline
@@ -24,6 +25,7 @@ from video_translate.preflight import preflight_errors, run_preflight
 UI_VERSION = "2026-02-20-final-mp4-downloads"
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 MAX_UI_JOB_HISTORY = 200
+DEFAULT_YOUTUBE_VIDEO_HEIGHT = 1080
 
 
 @dataclass
@@ -63,6 +65,7 @@ class UIYoutubeRequest:
     emit_srt: bool
     target_lang: str
     run_m3: bool
+    max_video_height: int | None = None
     cleanup_intermediate: bool = True
 
 
@@ -121,6 +124,30 @@ def _clamp_percent(percent: int) -> int:
     if percent > 100:
         return 100
     return int(percent)
+
+
+def _format_video_resolution_label(max_video_height: int | None) -> str:
+    if max_video_height is None:
+        return "kaynak (otomatik)"
+    return f"{int(max_video_height)}p"
+
+
+def _parse_video_resolution_height(raw_value: str | None) -> int | None:
+    normalized = (raw_value or "").strip().lower()
+    if not normalized or normalized in {"source", "best", "auto", "kaynak"}:
+        return None
+    if normalized.endswith("p"):
+        normalized = normalized[:-1]
+    try:
+        parsed = int(normalized)
+    except ValueError as exc:
+        raise ValueError(
+            "video_resolution must be one of: source, 720, 1080, 1440, 2160."
+        ) from exc
+    if parsed not in SUPPORTED_VIDEO_HEIGHT_OPTIONS:
+        supported = ", ".join(str(value) for value in SUPPORTED_VIDEO_HEIGHT_OPTIONS)
+        raise ValueError(f"Unsupported video_resolution '{parsed}'. Supported values: {supported}.")
+    return parsed
 
 
 def _notify_progress(progress_hook: ProgressHook | None, percent: int, phase: str) -> None:
@@ -229,6 +256,7 @@ def execute_youtube_dub_run(
     config = load_config(request.config_path)
     _ensure_non_mock_tts_backend_for_final_flow(config.tts.backend)
     target_lang = request.target_lang.strip() or config.translate.target_language
+    resolution_label = _format_video_resolution_label(request.max_video_height)
     preflight_report = run_preflight(
         yt_dlp_bin=config.tools.yt_dlp,
         ffmpeg_bin=config.tools.ffmpeg,
@@ -245,10 +273,10 @@ def execute_youtube_dub_run(
         raise RuntimeError("Preflight failed: " + " | ".join(issues))
     _notify_progress(progress_hook, 12, "On kontroller tamamlandi.")
 
-    _notify_progress(progress_hook, 18, "M1 basladi: indirme + ASR...")
+    _notify_progress(progress_hook, 18, f"M1 basladi: indirme + ASR (video: {resolution_label})...")
     m1_progress_state: dict[str, Any] = {
         "percent": 18,
-        "phase": "M1 basladi: indirme + ASR...",
+        "phase": f"M1 basladi: indirme + ASR (video: {resolution_label})...",
     }
 
     def _m1_progress(message: str) -> None:
@@ -264,9 +292,24 @@ def execute_youtube_dub_run(
             _notify_progress(progress_hook, 27, message)
             return
         if "asr basladi" in lowered:
+            m1_progress_state["percent"] = 30
+            m1_progress_state["phase"] = message
+            _notify_progress(progress_hook, 30, message)
+            return
+        if "modeli yukleniyor" in lowered or "fallback devrede" in lowered:
             m1_progress_state["percent"] = 31
             m1_progress_state["phase"] = message
             _notify_progress(progress_hook, 31, message)
+            return
+        if "model yuklendi" in lowered or "vad (sessizlik)" in lowered:
+            m1_progress_state["percent"] = 32
+            m1_progress_state["phase"] = message
+            _notify_progress(progress_hook, 32, message)
+            return
+        if "asr analiz basliyor" in lowered:
+            m1_progress_state["percent"] = 33
+            m1_progress_state["phase"] = message
+            _notify_progress(progress_hook, 33, message)
             return
         if "asr segment" in lowered:
             m1_progress_state["percent"] = 34
@@ -313,6 +356,7 @@ def execute_youtube_dub_run(
             emit_srt=request.emit_srt,
             preflight_report=preflight_report,
             progress_hook=_m1_progress,
+            max_video_height=request.max_video_height,
         )
     finally:
         m1_stop_event.set()
@@ -394,9 +438,13 @@ def execute_youtube_dub_run(
         "run_root": _to_ui_path(run_root),
         "output_dir": _to_ui_path(delivery.downloads_dir),
         "target_lang": target_lang,
+        "video_resolution_requested": resolution_label,
         "downloadables": _collect_downloadables([delivery.dubbed_video_mp4]),
         "stages": {
-            "m1": {"qa_report_json": _to_ui_path(m1_artifacts.qa_report)},
+            "m1": {
+                "qa_report_json": _to_ui_path(m1_artifacts.qa_report),
+                "requested_max_video_height": request.max_video_height,
+            },
             "m2": m2_payload,
             "m3": m3_payload,
             "delivery": delivery_payload,
@@ -582,7 +630,7 @@ def _html_page() -> str:
       padding: 10px;
     }
     label { font-size: 13px; color: var(--muted); }
-    input[type="text"] {
+    input[type="text"], select {
       width: 100%;
       border: 1px solid var(--line);
       border-radius: 8px;
@@ -711,6 +759,16 @@ video-translate run-dub --url "https://www.youtube.com/watch?v=VIDEO_ID" --confi
         <div class="field">
           <label>Downloads Dir</label>
           <input id="downloadsDir" type="text" value="downloads" />
+        </div>
+        <div class="field">
+          <label>Video Cozunurluk (YouTube indirme tavani)</label>
+          <select id="ytVideoResolution">
+            <option value="720">720p</option>
+            <option value="1080" selected>1080p (onerilen)</option>
+            <option value="1440">1440p</option>
+            <option value="2160">2160p</option>
+            <option value="source">Kaynak (otomatik)</option>
+          </select>
         </div>
       </div>
       <label class="check"><input id="ytEmitSrt" type="checkbox" checked /> M1 transcript SRT uret</label>
@@ -965,6 +1023,7 @@ video-translate run-dub --url "https://www.youtube.com/watch?v=VIDEO_ID" --confi
       body.set("run_id", document.getElementById("runId").value.trim());
       body.set("emit_srt", document.getElementById("ytEmitSrt").checked ? "1" : "0");
       body.set("target_lang", document.getElementById("ytTargetLang").value.trim());
+      body.set("video_resolution", document.getElementById("ytVideoResolution").value);
       body.set("run_m3", document.getElementById("ytRunM3").checked ? "1" : "0");
       body.set("cleanup_intermediate", document.getElementById("cleanupIntermediate").checked ? "1" : "0");
 
@@ -1116,6 +1175,7 @@ def _build_handler() -> type[BaseHTTPRequestHandler]:
                         emit_srt=_pick(form, "emit_srt", "1") == "1",
                         target_lang=_pick(form, "target_lang", "tr"),
                         run_m3=_pick(form, "run_m3", "1") == "1",
+                        max_video_height=_as_opt_video_resolution(form, "video_resolution"),
                         cleanup_intermediate=_pick(form, "cleanup_intermediate", "1") == "1",
                     )
                     result = start_youtube_job(request)
@@ -1185,6 +1245,13 @@ def _as_opt_text(form: dict[str, list[str]], key: str) -> str | None:
         return None
     value = values[0].strip()
     return value if value else None
+
+
+def _as_opt_video_resolution(form: dict[str, list[str]], key: str) -> int | None:
+    values = form.get(key, [])
+    if not values:
+        return DEFAULT_YOUTUBE_VIDEO_HEIGHT
+    return _parse_video_resolution_height(values[0])
 
 
 def run_ui_server(host: str, port: int) -> None:

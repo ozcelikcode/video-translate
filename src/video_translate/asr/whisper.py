@@ -23,30 +23,6 @@ def _is_probable_oom_error(exc: Exception) -> bool:
     )
 
 
-def _transcribe_with_settings(
-    *,
-    audio_path: Path,
-    model_name: str,
-    device: str,
-    compute_type: str,
-    asr_config: ASRConfig,
-) -> tuple[Any, Any]:
-    from faster_whisper import WhisperModel  # Imported lazily for startup speed.
-
-    model = WhisperModel(
-        model_size_or_path=model_name,
-        device=device,
-        compute_type=compute_type,
-    )
-    return model.transcribe(
-        str(audio_path),
-        language=asr_config.language,
-        beam_size=asr_config.beam_size,
-        word_timestamps=asr_config.word_timestamps,
-        vad_filter=asr_config.vad_filter,
-    )
-
-
 def _transcribe_and_collect(
     *,
     audio_path: Path,
@@ -55,14 +31,33 @@ def _transcribe_and_collect(
     compute_type: str,
     asr_config: ASRConfig,
     on_segment_collected: Callable[[int], None] | None = None,
+    on_progress: Callable[[str], None] | None = None,
 ) -> tuple[list[Any], Any]:
-    segments_iter, info = _transcribe_with_settings(
-        audio_path=audio_path,
-        model_name=model_name,
+    if on_progress:
+        on_progress(f"M1: '{model_name}' ASR modeli yukleniyor (gerekirse indirilecek)...")
+
+    from faster_whisper import WhisperModel  # Imported lazily for startup speed.
+
+    model = WhisperModel(
+        model_size_or_path=model_name,
         device=device,
         compute_type=compute_type,
-        asr_config=asr_config,
     )
+
+    if on_progress:
+        on_progress("M1: Model yuklendi. VAD (sessizlik) analizi ve ilk isleme basliyor...")
+
+    segments_iter, info = model.transcribe(
+        str(audio_path),
+        language=asr_config.language,
+        beam_size=asr_config.beam_size,
+        word_timestamps=asr_config.word_timestamps,
+        vad_filter=asr_config.vad_filter,
+    )
+
+    if on_progress:
+        on_progress("M1: ASR analiz basliyor...")
+
     # faster-whisper returns a generator that can raise at iteration time.
     # Force evaluation here so fallback logic can catch runtime failures.
     collected: list[Any] = []
@@ -77,6 +72,7 @@ def transcribe_audio(
     audio_path: Path,
     asr_config: ASRConfig,
     on_segment_collected: Callable[[int], None] | None = None,
+    on_progress: Callable[[str], None] | None = None,
 ) -> TranscriptDocument:
     try:
         raw_segments, info = _transcribe_and_collect(
@@ -86,6 +82,7 @@ def transcribe_audio(
             compute_type=asr_config.compute_type,
             asr_config=asr_config,
             on_segment_collected=on_segment_collected,
+            on_progress=on_progress,
         )
     except Exception as exc:  # noqa: BLE001
         # Primary ASR run failed. If fallback is enabled and fallback settings
@@ -106,6 +103,10 @@ def transcribe_audio(
             and not _is_probable_oom_error(exc)
         ):
             raise
+            
+        if on_progress:
+            on_progress(f"M1: ASR ilk deneme basarisiz. Fallback devrede ({asr_config.fallback_device})...")
+
         raw_segments, info = _transcribe_and_collect(
             audio_path=audio_path,
             model_name=asr_config.fallback_model,
@@ -113,6 +114,7 @@ def transcribe_audio(
             compute_type=asr_config.fallback_compute_type,
             asr_config=asr_config,
             on_segment_collected=on_segment_collected,
+            on_progress=on_progress,
         )
 
     segments: list[TranscriptSegment] = []

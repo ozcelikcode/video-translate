@@ -88,6 +88,7 @@ def test_execute_youtube_dub_run_full_chain(tmp_path: Path, monkeypatch) -> None
     m3_qa = run_root / "output" / "qa" / "m3_qa_report.json"
     m3_manifest = run_root / "run_m3_manifest.json"
     m3_preview = run_root / "output" / "tts" / "tts_preview_stitched.tr.wav"
+    m1_call_kwargs: dict[str, object] = {}
 
     def _fake_preflight(*args, **kwargs):  # noqa: ANN002, ANN003
         return PreflightReport(
@@ -104,6 +105,8 @@ def test_execute_youtube_dub_run_full_chain(tmp_path: Path, monkeypatch) -> None
         )
 
     def _fake_m1(*args, **kwargs):  # noqa: ANN002, ANN003
+        del args
+        m1_call_kwargs.update(kwargs)
         media = run_root / "input" / "source.mp4"
         media.parent.mkdir(parents=True, exist_ok=True)
         media.write_bytes(b"")
@@ -202,6 +205,7 @@ def test_execute_youtube_dub_run_full_chain(tmp_path: Path, monkeypatch) -> None
             emit_srt=True,
             target_lang="tr",
             run_m3=True,
+            max_video_height=720,
             cleanup_intermediate=True,
         ),
         progress_hook=lambda percent, phase: progress_events.append((percent, phase)),
@@ -211,8 +215,11 @@ def test_execute_youtube_dub_run_full_chain(tmp_path: Path, monkeypatch) -> None
     assert result["run_root"] == str(run_root)
     assert result["output_dir"] == str(downloads_dir)
     assert result["downloadables"] == [str(final_video)]
+    assert result["video_resolution_requested"] == "720p"
+    assert result["stages"]["m1"]["requested_max_video_height"] == 720
     assert result["stages"]["delivery"]["dubbed_video_mp4"] == str(final_video)
     assert result["stages"]["m3"] is not None
+    assert m1_call_kwargs["max_video_height"] == 720
     assert progress_events
     assert progress_events[-1][0] == 100
     assert any(percent >= 70 for percent, _ in progress_events)
@@ -246,6 +253,11 @@ def test_html_page_contains_visible_youtube_controls() -> None:
     assert "Video Translate Studio" in html
     assert "YouTube URL" in html
     assert "Downloads Dir" in html
+    assert "Video Cozunurluk (YouTube indirme tavani)" in html
+    assert "720p" in html
+    assert "1080p (onerilen)" in html
+    assert "1440p" in html
+    assert "2160p" in html
     assert "YouTube'dan Dublaj Baslat" in html
     assert "Ara dosyalari temizle" in html
     assert "Ana Is Akisi" in html

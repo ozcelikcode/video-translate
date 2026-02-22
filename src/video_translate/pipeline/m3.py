@@ -17,6 +17,7 @@ from video_translate.tts.contracts import (
     build_tts_output_document,
     parse_tts_input_document,
 )
+from video_translate.utils.subprocess_utils import CommandExecutionError, run_command
 
 
 @dataclass(frozen=True)
@@ -99,6 +100,89 @@ def _pad_wav_silence_to_duration(wav_path: Path, target_duration: float) -> floa
         wav_file.setcomptype(comp_type, comp_name)
         wav_file.writeframes(padded_frames)
     return target_frames / sample_rate
+
+
+def _wav_duration_seconds(wav_path: Path) -> float:
+    with wave.open(str(wav_path), "rb") as wav_file:
+        frame_count = wav_file.getnframes()
+        sample_rate = wav_file.getframerate()
+    if sample_rate <= 0:
+        return 0.0
+    return frame_count / sample_rate
+
+
+def _build_atempo_filter_chain(tempo_factor: float) -> str:
+    if tempo_factor <= 0.0:
+        raise ValueError("Tempo factor must be > 0.")
+    factors: list[float] = []
+    remaining = float(tempo_factor)
+    while remaining > 2.0 + 1e-9:
+        factors.append(2.0)
+        remaining /= 2.0
+    while remaining < 0.5 - 1e-9:
+        factors.append(0.5)
+        remaining /= 0.5
+    remaining = max(0.5, min(2.0, remaining))
+    factors.append(remaining)
+    return ",".join(f"atempo={factor:.6f}" for factor in factors)
+
+
+def _tempo_fit_wav_to_duration(
+    *,
+    ffmpeg_bin: str,
+    wav_path: Path,
+    target_duration: float,
+    tolerance_seconds: float,
+) -> float:
+    if target_duration <= 0.0:
+        return _wav_duration_seconds(wav_path)
+
+    with wave.open(str(wav_path), "rb") as wav_file:
+        channels = wav_file.getnchannels()
+        sample_rate = wav_file.getframerate()
+
+    current_duration = _wav_duration_seconds(wav_path)
+    if current_duration <= 0.0:
+        return current_duration
+    if current_duration <= target_duration + max(0.0, tolerance_seconds):
+        return current_duration
+
+    tempo_factor = current_duration / target_duration
+    if tempo_factor <= 1.0:
+        return current_duration
+
+    temp_output = wav_path.with_name(f"{wav_path.stem}.tempofit.wav")
+    if temp_output.exists():
+        temp_output.unlink()
+
+    command = [
+        ffmpeg_bin,
+        "-y",
+        "-i",
+        str(wav_path),
+        "-vn",
+        "-filter:a",
+        _build_atempo_filter_chain(tempo_factor),
+        "-ac",
+        str(channels),
+        "-ar",
+        str(sample_rate),
+        "-c:a",
+        "pcm_s16le",
+        str(temp_output),
+    ]
+    timeout_seconds = max(30.0, min(300.0, current_duration * 20.0))
+    try:
+        run_command(command, timeout_seconds=timeout_seconds)
+    except CommandExecutionError:
+        if temp_output.exists():
+            temp_output.unlink(missing_ok=True)
+        return current_duration
+
+    if not temp_output.exists():
+        return current_duration
+    temp_output.replace(wav_path)
+    return _wav_duration_seconds(wav_path)
 
 
 def _trim_wav_to_duration(wav_path: Path, target_duration: float) -> float:
@@ -187,6 +271,9 @@ def run_m3_pipeline(
     total_padded_seconds = 0.0
     duration_trim_applied = 0
     total_trimmed_seconds = 0.0
+    duration_tempofit_applied = 0
+    total_tempofit_adjusted_seconds = 0.0
+    duration_tolerance = max(0.0, float(config.tts.max_duration_delta_seconds))
     for segment in input_doc.segments:
         output_wav = segment_audio_dir / f"seg_{segment.id:06d}.wav"
         synthesized_duration = backend.synthesize_to_wav(
@@ -195,18 +282,31 @@ def run_m3_pipeline(
             target_duration=segment.duration,
             sample_rate=config.tts.sample_rate,
         )
-        if synthesized_duration < segment.duration:
+        duration_delta = synthesized_duration - segment.duration
+        if duration_delta < -duration_tolerance:
             padded_duration = _pad_wav_silence_to_duration(output_wav, segment.duration)
             if padded_duration > synthesized_duration:
                 duration_padding_applied += 1
                 total_padded_seconds += padded_duration - synthesized_duration
                 synthesized_duration = padded_duration
-        elif synthesized_duration > segment.duration:
-            trimmed_duration = _trim_wav_to_duration(output_wav, segment.duration)
-            if trimmed_duration < synthesized_duration:
-                duration_trim_applied += 1
-                total_trimmed_seconds += synthesized_duration - trimmed_duration
-                synthesized_duration = trimmed_duration
+        elif duration_delta > duration_tolerance:
+            tempofit_duration = _tempo_fit_wav_to_duration(
+                ffmpeg_bin=config.tools.ffmpeg,
+                wav_path=output_wav,
+                target_duration=segment.duration,
+                tolerance_seconds=duration_tolerance,
+            )
+            if tempofit_duration < synthesized_duration:
+                duration_tempofit_applied += 1
+                total_tempofit_adjusted_seconds += synthesized_duration - tempofit_duration
+                synthesized_duration = tempofit_duration
+
+            if (synthesized_duration - segment.duration) > duration_tolerance:
+                trimmed_duration = _trim_wav_to_duration(output_wav, segment.duration)
+                if trimmed_duration < synthesized_duration:
+                    duration_trim_applied += 1
+                    total_trimmed_seconds += synthesized_duration - trimmed_duration
+                    synthesized_duration = trimmed_duration
         segment_audio_paths.append(output_wav)
         synthesized_durations.append(synthesized_duration)
     synth_seconds = perf_counter() - synth_start
@@ -270,6 +370,8 @@ def run_m3_pipeline(
             "duration_postfit": {
                 "silence_padding_applied_segments": duration_padding_applied,
                 "total_padded_seconds": total_padded_seconds,
+                "tempo_fit_applied_segments": duration_tempofit_applied,
+                "total_tempo_fit_adjusted_seconds": total_tempofit_adjusted_seconds,
                 "trim_applied_segments": duration_trim_applied,
                 "total_trimmed_seconds": total_trimmed_seconds,
             },

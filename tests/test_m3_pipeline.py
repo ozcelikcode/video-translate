@@ -285,6 +285,10 @@ def test_run_m3_pipeline_trims_long_segments(tmp_path: Path, monkeypatch) -> Non
             return frame_count / sample_rate
 
     monkeypatch.setattr("video_translate.pipeline.m3.build_tts_backend", lambda *_: _LongBackend())
+    monkeypatch.setattr(
+        "video_translate.pipeline.m3._tempo_fit_wav_to_duration",
+        lambda **_: 1.0,
+    )
 
     run_m3_pipeline(
         tts_input_json_path=tts_input,
@@ -299,6 +303,132 @@ def test_run_m3_pipeline_trims_long_segments(tmp_path: Path, monkeypatch) -> Non
     assert segment["synthesized_duration"] <= 0.51
     manifest_payload = json.loads(run_manifest_json.read_text(encoding="utf-8"))
     assert manifest_payload["duration_postfit"]["trim_applied_segments"] == 1
+
+
+def test_run_m3_pipeline_uses_tempofit_before_trim(tmp_path: Path, monkeypatch) -> None:
+    tts_input = tmp_path / "output" / "tts" / "tts_input.tr.json"
+    tts_input.parent.mkdir(parents=True, exist_ok=True)
+    tts_input.write_text(
+        json.dumps(
+            {
+                "schema_version": "1.0",
+                "stage": "m3_tts_input",
+                "generated_at_utc": "2026-02-22T10:00:00Z",
+                "language": "tr",
+                "segment_count": 1,
+                "total_target_word_count": 1,
+                "segments": [
+                    {
+                        "id": 0,
+                        "start": 0.0,
+                        "end": 0.5,
+                        "duration": 0.5,
+                        "target_text": "merhaba",
+                        "target_word_count": 1,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    output_json = tmp_path / "output" / "tts" / "tts_output.tr.json"
+    qa_report_json = tmp_path / "output" / "qa" / "m3_qa_report.json"
+    run_manifest_json = tmp_path / "run_m3_manifest.json"
+
+    class _LongBackend:
+        name = "long"
+
+        def synthesize_to_wav(self, *, text: str, output_wav: Path, target_duration: float, sample_rate: int) -> float:
+            del text, target_duration
+            frame_count = int(round(1.0 * sample_rate))
+            output_wav.parent.mkdir(parents=True, exist_ok=True)
+            with wave.open(str(output_wav), "wb") as wav_file:
+                wav_file.setnchannels(1)
+                wav_file.setsampwidth(2)
+                wav_file.setframerate(sample_rate)
+                wav_file.writeframes(b"\x00\x00" * frame_count)
+            return frame_count / sample_rate
+
+    monkeypatch.setattr("video_translate.pipeline.m3.build_tts_backend", lambda *_: _LongBackend())
+    monkeypatch.setattr(
+        "video_translate.pipeline.m3._tempo_fit_wav_to_duration",
+        lambda **_: 0.5,
+    )
+
+    run_m3_pipeline(
+        tts_input_json_path=tts_input,
+        output_json_path=output_json,
+        qa_report_json_path=qa_report_json,
+        run_manifest_json_path=run_manifest_json,
+        config=_build_app_config(),
+    )
+
+    manifest_payload = json.loads(run_manifest_json.read_text(encoding="utf-8"))
+    assert manifest_payload["duration_postfit"]["tempo_fit_applied_segments"] == 1
+    assert manifest_payload["duration_postfit"]["trim_applied_segments"] == 0
+
+
+def test_run_m3_pipeline_does_not_trim_small_overshoot_within_tolerance(
+    tmp_path: Path, monkeypatch
+) -> None:
+    tts_input = tmp_path / "output" / "tts" / "tts_input.tr.json"
+    tts_input.parent.mkdir(parents=True, exist_ok=True)
+    tts_input.write_text(
+        json.dumps(
+            {
+                "schema_version": "1.0",
+                "stage": "m3_tts_input",
+                "generated_at_utc": "2026-02-22T10:00:00Z",
+                "language": "tr",
+                "segment_count": 1,
+                "total_target_word_count": 1,
+                "segments": [
+                    {
+                        "id": 0,
+                        "start": 0.0,
+                        "end": 0.5,
+                        "duration": 0.5,
+                        "target_text": "merhaba",
+                        "target_word_count": 1,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    output_json = tmp_path / "output" / "tts" / "tts_output.tr.json"
+    qa_report_json = tmp_path / "output" / "qa" / "m3_qa_report.json"
+    run_manifest_json = tmp_path / "run_m3_manifest.json"
+
+    class _SlightlyLongBackend:
+        name = "slightly_long"
+
+        def synthesize_to_wav(self, *, text: str, output_wav: Path, target_duration: float, sample_rate: int) -> float:
+            del text, target_duration
+            frame_count = int(round(0.54 * sample_rate))
+            output_wav.parent.mkdir(parents=True, exist_ok=True)
+            with wave.open(str(output_wav), "wb") as wav_file:
+                wav_file.setnchannels(1)
+                wav_file.setsampwidth(2)
+                wav_file.setframerate(sample_rate)
+                wav_file.writeframes(b"\x00\x00" * frame_count)
+            return frame_count / sample_rate
+
+    monkeypatch.setattr("video_translate.pipeline.m3.build_tts_backend", lambda *_: _SlightlyLongBackend())
+
+    run_m3_pipeline(
+        tts_input_json_path=tts_input,
+        output_json_path=output_json,
+        qa_report_json_path=qa_report_json,
+        run_manifest_json_path=run_manifest_json,
+        config=_build_app_config(),
+    )
+
+    output_payload = json.loads(output_json.read_text(encoding="utf-8"))
+    assert output_payload["segments"][0]["synthesized_duration"] >= 0.53
+    manifest_payload = json.loads(run_manifest_json.read_text(encoding="utf-8"))
+    assert manifest_payload["duration_postfit"]["tempo_fit_applied_segments"] == 0
+    assert manifest_payload["duration_postfit"]["trim_applied_segments"] == 0
 
 
 def test_run_m3_pipeline_fails_when_postfit_ratio_exceeds_limit(tmp_path: Path, monkeypatch) -> None:

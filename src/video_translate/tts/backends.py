@@ -148,6 +148,11 @@ class PiperTTSBackend(TTSBackend):
     noise_scale: float
     noise_w: float
     min_segment_seconds: float
+    adaptive_length_enabled: bool = True
+    adaptive_length_min_scale: float = 0.55
+    adaptive_length_max_scale: float = 1.65
+    adaptive_length_max_passes: int = 3
+    adaptive_length_tolerance_seconds: float = 0.06
     name: str = "piper"
 
     def synthesize_to_wav(
@@ -162,33 +167,62 @@ class PiperTTSBackend(TTSBackend):
         if not safe_text:
             safe_text = " "
         output_wav.parent.mkdir(parents=True, exist_ok=True)
-        command = [
-            self.piper_bin,
-            "--model",
-            str(self.model_path),
-            "--output_file",
-            str(output_wav),
-            "--length_scale",
-            f"{self.length_scale:.4f}",
-            "--noise_scale",
-            f"{self.noise_scale:.4f}",
-            "--noise_w",
-            f"{self.noise_w:.4f}",
-        ]
-        if self.config_path is not None:
-            command.extend(["--config", str(self.config_path)])
-        if self.speaker_id is not None:
-            command.extend(["--speaker", str(self.speaker_id)])
-        # Piper Windows launcher is a Python script; enforce UTF-8 stdin decoding.
-        run_command(
-            command,
-            input_text=safe_text + "\n",
-            env_overrides={
-                "PYTHONUTF8": "1",
-                "PYTHONIOENCODING": "utf-8",
-            },
-        )
-        duration = _wav_duration_seconds(output_wav)
+        min_scale = max(0.05, float(self.adaptive_length_min_scale))
+        max_scale = max(min_scale, float(self.adaptive_length_max_scale))
+        current_length_scale = max(min_scale, min(max_scale, self.length_scale))
+
+        def synthesize_once(length_scale: float) -> float:
+            command = [
+                self.piper_bin,
+                "--model",
+                str(self.model_path),
+                "--output_file",
+                str(output_wav),
+                "--length_scale",
+                f"{length_scale:.4f}",
+                "--noise_scale",
+                f"{self.noise_scale:.4f}",
+                "--noise_w",
+                f"{self.noise_w:.4f}",
+            ]
+            if self.config_path is not None:
+                command.extend(["--config", str(self.config_path)])
+            if self.speaker_id is not None:
+                command.extend(["--speaker", str(self.speaker_id)])
+            # Piper Windows launcher is a Python script; enforce UTF-8 stdin decoding.
+            run_command(
+                command,
+                input_text=safe_text + "\n",
+                env_overrides={
+                    "PYTHONUTF8": "1",
+                    "PYTHONIOENCODING": "utf-8",
+                },
+            )
+            return _wav_duration_seconds(output_wav)
+
+        duration = synthesize_once(current_length_scale)
+        if (
+            not self.adaptive_length_enabled
+            or target_duration <= 0.0
+            or self.adaptive_length_max_passes <= 0
+        ):
+            return max(duration, self.min_segment_seconds)
+
+        for _ in range(self.adaptive_length_max_passes):
+            delta = duration - target_duration
+            if abs(delta) <= self.adaptive_length_tolerance_seconds:
+                break
+            if duration <= 0.0:
+                break
+            proposed_length_scale = current_length_scale * (target_duration / duration)
+            if math.isclose(proposed_length_scale, current_length_scale, rel_tol=0.0, abs_tol=1e-4):
+                proposed_length_scale = current_length_scale + (-0.03 if delta > 0 else 0.03)
+            proposed_length_scale = max(min_scale, min(max_scale, proposed_length_scale))
+            if math.isclose(proposed_length_scale, current_length_scale, rel_tol=0.0, abs_tol=1e-4):
+                break
+            current_length_scale = proposed_length_scale
+            duration = synthesize_once(current_length_scale)
+
         return max(duration, self.min_segment_seconds)
 
 

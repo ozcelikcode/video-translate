@@ -37,6 +37,9 @@
 - Konfigurasyon: `TOML` (`configs/default.toml`)
 - ASR: `faster-whisper` (yerel model)
 - Ingest: harici komutlar (`yt-dlp`, `ffmpeg`)
+- YouTube indirme kalite tavani:
+  - `build_yt_dlp_command(..., max_video_height=...)` destekler
+  - desteklenen UI secenekleri: `720`, `1080`, `1440`, `2160` (ve `source`)
 - Dis komut katmani: `run_command(..., timeout_seconds=...)` timeout destekler
 - Dis komut katmani UTF-8 text mode kullanir:
   - `run_command(..., input_text=...)` cagrilarinda `encoding="utf-8"` + `errors="replace"`
@@ -154,18 +157,23 @@
   - kalite ozeti: `downloads/<run_id>/quality_summary.tr.json`
   - varsayilan ara dosya temizligi: acik
   - `tts.backend=mock` ise final YouTube akisi bilincli olarak fail eder (beep-only ciktiyi engeller)
+  - yeni alan: `video_resolution` (M1 YouTube indirme kalitesi tavani; UI varsayilan `1080p`)
 - M3 sure post-fit:
+  - tolerans ici (`tts.max_duration_delta_seconds`) kucuk sapmalarda trim/pad uygulanmaz
   - kisa kalan segment WAV'lerine sessizlik padding
-  - run manifest: `duration_postfit` metrikleri
-  - uzun kalan segment WAV'lerinde trim
+  - uzun kalan segment WAV'lerinde hard-trim oncesi `ffmpeg atempo` tempo-fit uygulanir
+  - run manifest: `duration_postfit` metrikleri (+ `tempo_fit_*`)
 - M3 QA post-fit guard:
   - post-fit segment/sure oranlari esik ustundeyse kalite bayragi uretir
+- Piper sure uyumu (yeni):
+  - `PiperTTSBackend` segment bazli adaptif `length_scale` retry kullanir
+  - amac: sentez asamasinda hedefe yaklasip hard-trim ihtiyacini azaltmak
 - Windows startup script: `open_project.bat`
   - `.venv` olusturma + `pip install -e .[dev,m2,tts_piper]` + Piper model bootstrap + `doctor` + `ui`
   - Opsiyonlar: `--skip-install`, `--no-ui`
 - Piper komut cozumleme:
   - PATH disinda repo ici `.venv/Scripts/piper.exe` ve `.venv/bin/piper` fallback'i desteklenir.
-- Son tam test sonucu: `90 passed` (2026-02-20)
+- Son tam test sonucu: `95 passed` (2026-02-22)
 
 ## Handoff Teknik Notlari
 - M3 icin harici API kullanilmiyor; mevcut backend tamamen yerel dosya uretimi yapiyor.

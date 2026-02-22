@@ -210,6 +210,30 @@ Proje v1 (M1->M3) tamamlandi; uctan uca yerel ve API'siz dublaj akislari calisiy
   - tam test sonucu: `python -m pytest -q` -> `90 passed` (2026-02-20)
 - Glossary terim kapsami genisletildi:
   - `configs/glossary.en-tr.json` -> `elephant`, `elephants`, `trunk`, `trunks` terimleri eklendi.
+- YouTube UI cozumurluk secimi eklendi:
+  - UI ana akista `720p / 1080p / 1440p / 2160p / Kaynak` secenekleri gorunur
+  - varsayilan `1080p (onerilen)`
+  - backend `video_resolution` alanini alip M1 `yt-dlp` indirmesine `height<=N` filtresi olarak uygular
+  - ilgili kodlar:
+    - `src/video_translate/ui.py`
+    - `src/video_translate/pipeline/m1.py`
+    - `src/video_translate/ingest/youtube.py`
+  - testler:
+    - `tests/test_commands.py`
+    - `tests/test_ui.py`
+- ASR uzun suruyor gorunumu icin canli kontrol notu (2026-02-22):
+  - `%31` M1/ASR asamasinda uzun sure kalma tek basina deadlock degil
+  - `job-status.updated_at_utc` ilerliyorsa islem calisiyor demektir
+  - 8 dakikalik videoda CPU fallback durumunda ASR suresi belirgin uzayabilir
+- M3 konusma kesilme/jump sorunu icin sure uyumu iyilestirildi:
+  - kok neden: hedef sureyi az da olsa asan segmentlerde kosulsuz hard-trim (son hece/kelime kesilmesi)
+  - `pipeline.m3` tolerans ici (`tts.max_duration_delta_seconds`) kucuk sapmalarda trim/pad yapmaz
+  - buyuk tasmalarda hard-trim oncesi `ffmpeg atempo` ile tempo-fit uygular
+  - `tts.backends.PiperTTSBackend` segment bazli adaptif `length_scale` retry ekledi
+  - `run_m3_manifest.json` `duration_postfit` icine `tempo_fit_applied_segments` ve `total_tempo_fit_adjusted_seconds` eklendi
+  - testler:
+    - `tests/test_m3_pipeline.py` (tempofit-before-trim + small-overshoot no-trim)
+    - `tests/test_tts_backends.py` (piper adaptive length-scale)
 - Adlandirma disiplin karari netlestirildi:
   - uretim tarafinda `demo/test` adlari kullanilmaz
   - test kodlari yalnizca `tests/` altinda tutulur
@@ -227,6 +251,8 @@ Proje v1 (M1->M3) tamamlandi; uctan uca yerel ve API'siz dublaj akislari calisiy
 - Son test sonucu (guncel): `87 passed` (2026-02-20).
 - Son test sonucu (guncel): `88 passed` (2026-02-20).
 - Son test sonucu (guncel): `90 passed` (2026-02-20).
+- Son test sonucu (guncel): `92 passed` (2026-02-22).
+- Son test sonucu (guncel): `95 passed` (2026-02-22).
 
 ## Calisma Agaci Durumu (Handoff)
 - Commit edilmemis degisiklikler mevcut.

@@ -339,6 +339,29 @@ Proje v1 kapanis durumu: tek komutla uctan uca akisi calisan, QA gate destekli M
   - Son test sonucu: `python -m pytest -q` -> `90 passed` (2026-02-20).
 - Glossary EN->TR terim listesi genisletildi:
   - `configs/glossary.en-tr.json` icine `elephant/elephants/trunk/trunks` terimleri eklendi.
+- YouTube UI video cozumurluk secimi eklendi (download hiz/kontrol):
+  - UI ana akista yeni alan: `Video Cozunurluk (YouTube indirme tavani)` (`720p/1080p/1440p/2160p` + kaynak)
+  - POST `/run-youtube-dub` -> `video_resolution` alanini kabul eder
+  - `execute_youtube_dub_run` -> `run_m1_pipeline(max_video_height=...)` forward eder
+  - `ingest.youtube.build_yt_dlp_command` `--format` ile `height<=N` filtresi uygular
+  - UI varsayilan secim: `1080p (onerilen)`
+  - not: bu secim ASR surelerini dogrudan degil, esasen indirme boyutu/suresini etkiler
+- ASR takildi gorunumu (31% uzun sure) icin canli kontrol notu:
+  - `GET /job-status` payload'inda `updated_at_utc` ilerliyorsa job deadlock degildir
+  - 8 dakikalik videoda M1/ASR asamasi CPU fallback ile uzun surebilir; heartbeat metni (`suruyor: Ns`) bunun icin eklidir
+  - son canli gozlem (2026-02-22): `status=running`, `%31`, `updated_at_utc` ilerliyor -> ASR devam ediyor.
+- M3 konusma kesilmesi / ileri segmente atlama sorunu icin sure uyumu guclendirildi:
+  - kok neden: hedef sureyi cok az asan segmentler dahil hepsi hard-trim ile kesiliyordu; bu son hece/kelimeyi kopariyordu.
+  - `pipeline.m3` artik `tts.max_duration_delta_seconds` toleransi icindeki kucuk sapmalarda trim/pad yapmaz.
+  - buyuk tasmalarda hard-trim oncesi `ffmpeg atempo` ile tempo-fit uygulanir (icerik korunarak sure kisaltma).
+  - `tts.backends.PiperTTSBackend` segment bazli adaptif `length_scale` retry ekledi; sentez asamasinda hedefe yaklasir.
+  - `run_m3_manifest.json` `duration_postfit` icine yeni metrikler yazilir:
+    - `tempo_fit_applied_segments`
+    - `total_tempo_fit_adjusted_seconds`
+  - testler guncellendi:
+    - `tests/test_m3_pipeline.py` (tolerans/no-trim + tempofit-before-trim)
+    - `tests/test_tts_backends.py` (piper adaptive length-scale retry)
+  - son dogrulama: `python -m pytest -q` -> `95 passed` (2026-02-22).
 
 ## Aktif Kararlar
 - Gelistirme `M1 -> M5` kademeleriyle ilerleyecek.

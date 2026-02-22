@@ -17,6 +17,7 @@ Pipeline tabanli, moduler, asamali genisletilebilir bir mimari.
 - `cli.run-m1` -> `pipeline.m1.run_m1_pipeline`
 - `cli.doctor` -> `preflight.run_preflight`
 - `ingest.youtube.download_youtube_source` ile kaynak medya indirme
+  - opsiyonel `max_video_height` ile yt-dlp `height<=N` filtreli kalite tavani uygulanabilir
 - `ingest.audio.normalize_audio_for_asr` ile mono 16k WAV uretimi
 - `asr.whisper.transcribe_audio` ile zaman damgali metin cikarma
 - `io.write_transcript_json` ve `io.write_srt` ile cikti yazimi
@@ -95,8 +96,13 @@ Pipeline tabanli, moduler, asamali genisletilebilir bir mimari.
 - Desteklenen backendler: `mock`, `espeak`, `piper`
 - `espeak` sure uyumu: hedef sureye yaklasmak icin adaptif hiz denemeleri (bounded retry)
 - `piper` yuksek kalite ses: ONNX model tabanli yerel sentez (API'siz)
+- `piper` sure uyumu: segment bazli adaptif `length_scale` retry (bounded) ile hedef sureye yaklasma
 - Segment bazli WAV ciktilari: `output/tts/segments/seg_XXXXXX.wav`
-- Sure post-fit: hedef sÃ¼reden kisa kalan segmentlere WAV sonuna sessizlik padding
+- Sure post-fit:
+  - tolerans ici kucuk sure sapmalarinda mudahale yok (`tts.max_duration_delta_seconds`)
+  - hedef sureden kisa kalan segmentlere WAV sonuna sessizlik padding
+  - hedef sureden uzun kalan segmentlerde hard-trim oncesi `ffmpeg atempo` tempo-fit
+  - yalniz tempo-fit sonrasinda halen esik ustu tasma varsa hard-trim
 - Segment stitching preview cikti: `output/tts/tts_preview_stitched.<lang>.wav`
 - Cikti: `output/tts/tts_output.tr.json`
 - QA: `qa.m3_report.build_m3_qa_report`
@@ -112,6 +118,8 @@ Pipeline tabanli, moduler, asamali genisletilebilir bir mimari.
 - M3 run manifest ek alani:
   - `duration_postfit.silence_padding_applied_segments`
   - `duration_postfit.total_padded_seconds`
+  - `duration_postfit.tempo_fit_applied_segments`
+  - `duration_postfit.total_tempo_fit_adjusted_seconds`
   - `duration_postfit.trim_applied_segments`
   - `duration_postfit.total_trimmed_seconds`
 - M3 QA yeni bayraklar:
@@ -188,6 +196,9 @@ Pipeline tabanli, moduler, asamali genisletilebilir bir mimari.
   - `queued/running/completed/failed` durumlari
   - `progress_percent` (0-100) + `phase` ile asama bazli canli izleme
   - `completed` durumunda `result` alaninda final YouTube teslim payload'i tasinir
+- YouTube UI akisi ekstra kontrol:
+  - `video_resolution` (`720/1080/1440/2160/source`) alani desteklenir
+  - bu alan M1 indirme kalitesi tavanini kontrol eder (ASR hesaplama suresini dogrudan kontrol etmez)
 - Final YouTube teslim guvencesi:
   - `execute_youtube_dub_run` akisinda `tts.backend=mock` reddedilir
   - kullaniciya `espeak` profiline gecis mesaji doner

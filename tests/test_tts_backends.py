@@ -188,6 +188,62 @@ def test_piper_backend_builds_command_and_writes_wav(monkeypatch: pytest.MonkeyP
     assert env_overrides.get("PYTHONIOENCODING") == "utf-8"
 
 
+def test_piper_backend_adaptive_length_scale_retries_toward_target(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    backend = PiperTTSBackend(
+        piper_bin="piper",
+        model_path=tmp_path / "voice.onnx",
+        config_path=tmp_path / "voice.onnx.json",
+        speaker_id=None,
+        length_scale=1.0,
+        noise_scale=0.6,
+        noise_w=0.7,
+        min_segment_seconds=0.12,
+        adaptive_length_enabled=True,
+        adaptive_length_min_scale=0.30,
+        adaptive_length_max_scale=1.65,
+        adaptive_length_max_passes=3,
+        adaptive_length_tolerance_seconds=0.04,
+    )
+    output_wav = tmp_path / "seg_piper_adaptive.wav"
+    captured_length_scales: list[float] = []
+    scripted_durations = [0.95, 0.58, 0.51]
+
+    def fake_run_command(
+        command: list[str],
+        cwd: Path | None = None,
+        input_text: str | None = None,
+        env_overrides: dict[str, str] | None = None,
+    ) -> None:
+        del cwd, input_text, env_overrides
+        length_scale_index = command.index("--length_scale") + 1
+        captured_length_scales.append(float(command[length_scale_index]))
+        duration = scripted_durations[
+            min(len(captured_length_scales) - 1, len(scripted_durations) - 1)
+        ]
+        mock_backend = MockTTSBackend(base_tone_hz=220, min_segment_seconds=0.12)
+        mock_backend.synthesize_to_wav(
+            text="ornek",
+            output_wav=output_wav,
+            target_duration=duration,
+            sample_rate=24000,
+        )
+
+    monkeypatch.setattr("video_translate.tts.backends.run_command", fake_run_command)
+    duration = backend.synthesize_to_wav(
+        text="ornek metin",
+        output_wav=output_wav,
+        target_duration=0.50,
+        sample_rate=24000,
+    )
+
+    assert output_wav.exists()
+    assert len(captured_length_scales) >= 2
+    assert captured_length_scales[-1] < captured_length_scales[0]
+    assert duration <= 0.53
+
+
 def test_espeak_backend_adaptive_rate_retries_until_tolerance(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

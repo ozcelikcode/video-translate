@@ -1,0 +1,17 @@
+{
+  "stage": "final_delivery",
+  "generated_at_utc": "2026-02-20T20:05:32.706073+00:00",
+  "run_id": "m1_20260220_200436",
+  "target_language": "tr",
+  "final_video_mp4": "C:\\Users\\ozcelik\\Documents\\GitHub\\video-translate\\downloads\\m1_20260220_200436\\video_dubbed.tr.mp4",
+  "qa": {
+    "overall_passed": false,
+    "m1_quality_flags": [],
+    "m2_quality_flags": [
+      "glossary_term_miss_present"
+    ],
+    "m3_quality_flags": [
+      "postfit_segment_ratio_above_max"
+    ]
+  }
+}

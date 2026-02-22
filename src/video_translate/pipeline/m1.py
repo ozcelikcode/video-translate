@@ -23,11 +23,15 @@ def _build_run_manifest(
     config: AppConfig,
     artifacts: M1Artifacts,
     preflight_report: PreflightReport | None,
+    requested_max_video_height: int | None = None,
 ) -> dict[str, object]:
     manifest: dict[str, object] = {
         "stage": "m1",
         "created_at_utc": datetime.now(tz=UTC).isoformat(),
         "source_url": source_url,
+        "ingest_options": {
+            "requested_max_video_height": requested_max_video_height,
+        },
         "config": {
             "tools": asdict(config.tools),
             "pipeline": {
@@ -67,6 +71,7 @@ def run_m1_pipeline(
     emit_srt: bool = True,
     preflight_report: PreflightReport | None = None,
     progress_hook: M1ProgressHook | None = None,
+    max_video_height: int | None = None,
 ) -> M1Artifacts:
     effective_workspace = workspace_dir or config.pipeline.workspace_dir
     paths = create_run_paths(effective_workspace, run_id)
@@ -77,6 +82,7 @@ def run_m1_pipeline(
         url=source_url,
         output_dir=paths.input_dir,
         yt_dlp_bin=config.tools.yt_dlp,
+        max_video_height=max_video_height,
     )
 
     if progress_hook is not None:
@@ -99,10 +105,15 @@ def run_m1_pipeline(
         if index <= 3 or index % 8 == 0:
             progress_hook(f"M1: ASR segment cozuluyor... ({index})")
 
+    def _on_asr_progress(msg: str) -> None:
+        if progress_hook is not None:
+            progress_hook(msg)
+
     transcript_doc = transcribe_audio(
         normalized_audio,
         config.asr,
         on_segment_collected=_on_asr_segment,
+        on_progress=_on_asr_progress,
     )
     transcript_json = paths.output_transcript_dir / "transcript.en.json"
     if progress_hook is not None:
@@ -136,6 +147,7 @@ def run_m1_pipeline(
             config=config,
             artifacts=artifacts,
             preflight_report=preflight_report,
+            requested_max_video_height=max_video_height,
         ),
     )
     return artifacts

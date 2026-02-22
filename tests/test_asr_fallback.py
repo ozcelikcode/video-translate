@@ -55,16 +55,16 @@ def test_is_probable_oom_error_detects_cuda_messages() -> None:
 def test_transcribe_audio_falls_back_on_oom(monkeypatch: Any, tmp_path: Path) -> None:
     calls: list[tuple[str, str, str]] = []
 
-    def fake_transcribe_with_settings(**kwargs: Any) -> tuple[list[_DummySegment], _DummyInfo]:
-        calls.append((kwargs["model_name"], kwargs["device"], kwargs["compute_type"]))
-        if len(calls) == 1:
-            raise RuntimeError("CUDA out of memory")
-        return ([_DummySegment()], _DummyInfo())
+    class FakeModel:
+        def __init__(self, model_size_or_path: str, device: str, compute_type: str, **kwargs: Any) -> None:
+            calls.append((model_size_or_path, device, compute_type))
+            if len(calls) == 1:
+                raise RuntimeError("CUDA out of memory")
 
-    monkeypatch.setattr(
-        "video_translate.asr.whisper._transcribe_with_settings",
-        fake_transcribe_with_settings,
-    )
+        def transcribe(self, *args: Any, **kwargs: Any) -> tuple[list[_DummySegment], _DummyInfo]:
+            return ([_DummySegment()], _DummyInfo())
+
+    monkeypatch.setattr("faster_whisper.WhisperModel", FakeModel)
 
     result = transcribe_audio(tmp_path / "audio.wav", _asr_config())
 
@@ -80,16 +80,16 @@ def test_transcribe_audio_falls_back_on_non_oom_when_primary_is_cuda(
 ) -> None:
     calls: list[tuple[str, str, str]] = []
 
-    def fake_transcribe_with_settings(**kwargs: Any) -> tuple[list[_DummySegment], _DummyInfo]:
-        calls.append((kwargs["model_name"], kwargs["device"], kwargs["compute_type"]))
-        if len(calls) == 1:
-            raise RuntimeError("Library cublas64_12.dll is not found or cannot be loaded")
-        return ([_DummySegment()], _DummyInfo())
+    class FakeModel:
+        def __init__(self, model_size_or_path: str, device: str, compute_type: str, **kwargs: Any) -> None:
+            calls.append((model_size_or_path, device, compute_type))
 
-    monkeypatch.setattr(
-        "video_translate.asr.whisper._transcribe_with_settings",
-        fake_transcribe_with_settings,
-    )
+        def transcribe(self, *args: Any, **kwargs: Any) -> tuple[list[_DummySegment], _DummyInfo]:
+            if len(calls) == 1:
+                raise RuntimeError("Library cublas64_12.dll is not found or cannot be loaded")
+            return ([_DummySegment()], _DummyInfo())
+
+    monkeypatch.setattr("faster_whisper.WhisperModel", FakeModel)
 
     result = transcribe_audio(tmp_path / "audio.wav", _asr_config())
 
@@ -111,16 +111,16 @@ def test_transcribe_audio_falls_back_when_generator_raises_on_iteration(
         def __next__(self) -> _DummySegment:
             raise RuntimeError("Library cublas64_12.dll is not found or cannot be loaded")
 
-    def fake_transcribe_with_settings(**kwargs: Any) -> tuple[Any, _DummyInfo]:
-        calls.append((kwargs["model_name"], kwargs["device"], kwargs["compute_type"]))
-        if len(calls) == 1:
-            return (_FailingIter(), _DummyInfo())
-        return ([_DummySegment()], _DummyInfo())
+    class FakeModel:
+        def __init__(self, model_size_or_path: str, device: str, compute_type: str, **kwargs: Any) -> None:
+            calls.append((model_size_or_path, device, compute_type))
 
-    monkeypatch.setattr(
-        "video_translate.asr.whisper._transcribe_with_settings",
-        fake_transcribe_with_settings,
-    )
+        def transcribe(self, *args: Any, **kwargs: Any) -> tuple[Any, _DummyInfo]:
+            if len(calls) == 1:
+                return (_FailingIter(), _DummyInfo())
+            return ([_DummySegment()], _DummyInfo())
+
+    monkeypatch.setattr("faster_whisper.WhisperModel", FakeModel)
 
     result = transcribe_audio(tmp_path / "audio.wav", _asr_config())
 
