@@ -92,6 +92,17 @@ class TTSConfig:
     piper_length_scale: float = 1.0
     piper_noise_scale: float = 0.667
     piper_noise_w: float = 0.8
+    boundary_stabilization_enabled: bool = True
+    boundary_max_gap_borrow_seconds: float = 0.18
+    boundary_max_start_delay_seconds: float = 0.12
+    boundary_fade_in_ms: int = 12
+    boundary_fade_out_ms: int = 18
+    boundary_crossfade_ms: int = 24
+    boundary_retry_risky_segments: bool = True
+    boundary_retry_max_passes: int = 2
+    boundary_energy_trim_enabled: bool = True
+    boundary_energy_trim_lookback_ms: int = 80
+    boundary_hard_trim_fallback_enabled: bool = True
 
 
 @dataclass(frozen=True)
@@ -418,6 +429,46 @@ def load_config(config_path: Path | None = None) -> AppConfig:
         tts_table.get("piper_noise_w", 0.8),
         "tts.piper_noise_w",
     )
+    tts_boundary_stabilization_enabled = bool(
+        tts_table.get("boundary_stabilization_enabled", True)
+    )
+    tts_boundary_max_gap_borrow_seconds = _required_non_negative_float(
+        tts_table.get("boundary_max_gap_borrow_seconds", 0.18),
+        "tts.boundary_max_gap_borrow_seconds",
+    )
+    tts_boundary_max_start_delay_seconds = _required_non_negative_float(
+        tts_table.get("boundary_max_start_delay_seconds", 0.12),
+        "tts.boundary_max_start_delay_seconds",
+    )
+    tts_boundary_fade_in_ms = _required_non_negative_int(
+        tts_table.get("boundary_fade_in_ms", 12),
+        "tts.boundary_fade_in_ms",
+    )
+    tts_boundary_fade_out_ms = _required_non_negative_int(
+        tts_table.get("boundary_fade_out_ms", 18),
+        "tts.boundary_fade_out_ms",
+    )
+    tts_boundary_crossfade_ms = _required_non_negative_int(
+        tts_table.get("boundary_crossfade_ms", 24),
+        "tts.boundary_crossfade_ms",
+    )
+    tts_boundary_retry_risky_segments = bool(
+        tts_table.get("boundary_retry_risky_segments", True)
+    )
+    tts_boundary_retry_max_passes = _required_non_negative_int(
+        tts_table.get("boundary_retry_max_passes", 2),
+        "tts.boundary_retry_max_passes",
+    )
+    tts_boundary_energy_trim_enabled = bool(
+        tts_table.get("boundary_energy_trim_enabled", True)
+    )
+    tts_boundary_energy_trim_lookback_ms = _required_non_negative_int(
+        tts_table.get("boundary_energy_trim_lookback_ms", 80),
+        "tts.boundary_energy_trim_lookback_ms",
+    )
+    tts_boundary_hard_trim_fallback_enabled = bool(
+        tts_table.get("boundary_hard_trim_fallback_enabled", True)
+    )
 
     return AppConfig(
         tools=ToolConfig(
@@ -493,5 +544,16 @@ def load_config(config_path: Path | None = None) -> AppConfig:
             piper_length_scale=tts_piper_length_scale,
             piper_noise_scale=tts_piper_noise_scale,
             piper_noise_w=tts_piper_noise_w,
+            boundary_stabilization_enabled=tts_boundary_stabilization_enabled,
+            boundary_max_gap_borrow_seconds=tts_boundary_max_gap_borrow_seconds,
+            boundary_max_start_delay_seconds=tts_boundary_max_start_delay_seconds,
+            boundary_fade_in_ms=tts_boundary_fade_in_ms,
+            boundary_fade_out_ms=tts_boundary_fade_out_ms,
+            boundary_crossfade_ms=tts_boundary_crossfade_ms,
+            boundary_retry_risky_segments=tts_boundary_retry_risky_segments,
+            boundary_retry_max_passes=tts_boundary_retry_max_passes,
+            boundary_energy_trim_enabled=tts_boundary_energy_trim_enabled,
+            boundary_energy_trim_lookback_ms=tts_boundary_energy_trim_lookback_ms,
+            boundary_hard_trim_fallback_enabled=tts_boundary_hard_trim_fallback_enabled,
         ),
     )

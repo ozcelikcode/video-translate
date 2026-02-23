@@ -2,6 +2,12 @@
 
 ## Mevcut Odak
 Proje v1 kapanis durumu: tek komutla uctan uca akisi calisan, QA gate destekli M1->M2->M3 dublaj sistemi.
+Ek odak (kalite): M3 segment sonu kopma ve ani konusmaci gecislerini azaltan boundary-aware stabilizasyon.
+
+## Handoff Snapshot (2026-02-23)
+- Son test durumu: `python -m pytest -q` -> `102 passed` (2026-02-23).
+- Son odak: M2+M3 boundary stabilization patch'i (timing hints -> boundary hints -> scheduler/stitch -> QA telemetri).
+- Durum: Uygulama + testler tamam; v1 tamamlama durumu degismedi (`%100`), kalite/stabilizasyon iyilestirmesi olarak eklendi.
 
 ## Handoff Snapshot (2026-02-20)
 - Son test durumu: `python -m pytest -q` -> `87 passed` (2026-02-20).
@@ -362,6 +368,36 @@ Proje v1 kapanis durumu: tek komutla uctan uca akisi calisan, QA gate destekli M
     - `tests/test_m3_pipeline.py` (tolerans/no-trim + tempofit-before-trim)
     - `tests/test_tts_backends.py` (piper adaptive length-scale retry)
   - son dogrulama: `python -m pytest -q` -> `95 passed` (2026-02-22).
+- M2+M3 boundary stabilization patch'i eklendi (konusma kesilmesi ve ani gecis azaltma):
+  - `translate.contracts` segmentlerine optional `source_timing_hints` (M1 word timestamp ozetleri) eklendi.
+  - `m3_prep` asamasinda `boundary_hints` uretiliyor:
+    - gap budget (`can_borrow_left/right_gap_seconds`)
+    - continuation risk (`continuation_risk_prev/next`)
+    - `boundary_cut_risk_score`
+  - `tts.contracts` genisletildi:
+    - input optional `source_timing_hints`, `boundary_hints`
+    - output optional `scheduled_start`, `scheduled_end`, `stabilization_applied`, `fit_strategy`
+  - `pipeline.m3` guclendirildi:
+    - bounded gap-borrow ile effective slot suresi
+    - bounded start-delay scheduler (`scheduled playback window`)
+    - riskli segmentlerde pipeline-level retry
+    - energy-aware trim (hard-trim fallback oncesi)
+    - stitched preview'de fade + bounded crossfade mix
+  - `qa.m3_report` stabilization metrikleri ve bayraklari eklendi:
+    - `hard_trim_fallback_present`
+    - `boundary_start_delay_above_budget_present`
+    - `residual_boundary_collision_present`
+    - `stabilization_retry_rate_high`
+  - `qa.m2_report` fail-free `boundary_risk_metrics` heuristigi eklendi.
+  - `tts.boundary_*` config alanlari ve GTX1650 profilleri guncellendi.
+  - test kapsami genisletildi:
+    - `tests/test_translate_contracts.py`
+    - `tests/test_m3_prep.py`
+    - `tests/test_m3_pipeline.py`
+    - `tests/test_m3_qa_report.py`
+    - `tests/test_m2_qa_report.py`
+    - `tests/test_config.py`
+  - son dogrulama: `python -m pytest -q` -> `102 passed` (2026-02-23).
 
 ## Aktif Kararlar
 - Gelistirme `M1 -> M5` kademeleriyle ilerleyecek.
@@ -373,6 +409,7 @@ Proje v1 kapanis durumu: tek komutla uctan uca akisi calisan, QA gate destekli M
 
 ## Sonraki Adimlar
 - Bu repo kapsaminda zorunlu teknik adim kalmadi; sonraki isler yeni faz/backlog olarak acilabilir.
+- Bu patch icin en dogru bir sonraki dogrulama: problemli ornek videoda manuel dinleme + `run_m3_manifest.json`/`m3_qa_report.json` stabilizasyon metrik kontrolu.
 
 ## Sonraki Model Icin Net Baslangic Akisi
 1. `git status --short` ile degisiklikleri gor.

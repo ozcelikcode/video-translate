@@ -54,6 +54,7 @@ Pipeline tabanli, moduler, asamali genisletilebilir bir mimari.
 ## M2 Hazirlik Akisi
 - `cli.prepare-m2` -> `pipeline.m2_prep.prepare_m2_translation_input`
 - M1 transcript JSON'undan ceviri giris sozlesmesi uretimi
+- M1 word timestamp verileri varsa segment bazli `source_timing_hints` ozetleri (first/last word + leading/trailing silence) M2 contract'a eklenir (optional/backward-compatible).
 - Cikti: `output/translate/translation_input.en-tr.json`
 
 ## M2 Uygulanan Akis
@@ -88,6 +89,8 @@ Pipeline tabanli, moduler, asamali genisletilebilir bir mimari.
 ## M3 Hazirlik Akisi
 - `cli.prepare-m3` -> `pipeline.m3_prep.prepare_m3_tts_input`
 - M2 translation output JSON'undan TTS giris sozlesmesi uretimi
+- M2'den gelen optional `source_timing_hints` M3 input'a tasinabilir.
+- M3 prep komsu segmentlerden `boundary_hints` heuristikleri uretir (gap budget + continuation risk + `boundary_cut_risk_score`).
 - Cikti: `output/tts/tts_input.tr.json`
 
 ## M3 Uygulanan Akis
@@ -103,7 +106,15 @@ Pipeline tabanli, moduler, asamali genisletilebilir bir mimari.
   - hedef sureden kisa kalan segmentlere WAV sonuna sessizlik padding
   - hedef sureden uzun kalan segmentlerde hard-trim oncesi `ffmpeg atempo` tempo-fit
   - yalniz tempo-fit sonrasinda halen esik ustu tasma varsa hard-trim
+- Boundary-aware stabilizasyon (M2+M3):
+  - riskli segmentlerde pipeline-level retry (bounded)
+  - effective slot suresi = canonical segment suresi + bounded gap-borrow
+  - scheduled playback windows (`scheduled_start/end`) bounded start-delay ile hesaplanir
+  - hard-trim oncesi energy-aware trim fallback kullanilir
 - Segment stitching preview cikti: `output/tts/tts_preview_stitched.<lang>.wav`
+- Stitching yumusatma:
+  - segment bazli fade-in/fade-out
+  - overlap sinirinda bounded crossfade mix (`tts.boundary_crossfade_ms`)
 - Cikti: `output/tts/tts_output.tr.json`
 - QA: `qa.m3_report.build_m3_qa_report`
 - QA cikti: `output/qa/m3_qa_report.json`
@@ -111,6 +122,7 @@ Pipeline tabanli, moduler, asamali genisletilebilir bir mimari.
   - sure toleransi delta kontrolu
   - bos hedef metin kontrolu
   - post-fit mudahale yogunlugu kontrolu (segment orani + sure orani)
+  - stabilization telemetri (retry/gap-borrow/start-delay/crossfade/hard-trim fallback/collision)
 - M3 QA acceptance gate:
   - QA raporundaki `quality_flags` -> whitelist disinda kalanlar `blocked_flags`
   - `tts.qa_fail_on_flags=true` ise pipeline `RuntimeError` ile durur
@@ -120,11 +132,21 @@ Pipeline tabanli, moduler, asamali genisletilebilir bir mimari.
   - `duration_postfit.total_padded_seconds`
   - `duration_postfit.tempo_fit_applied_segments`
   - `duration_postfit.total_tempo_fit_adjusted_seconds`
+  - `duration_postfit.energy_trim_applied_segments`
+  - `duration_postfit.total_energy_trimmed_seconds`
   - `duration_postfit.trim_applied_segments`
   - `duration_postfit.total_trimmed_seconds`
+- M3 run manifest `stabilization` alani:
+  - `retry_*`, `gap_borrow_*`, `start_delay_*`, `crossfade_applied_boundaries`
+  - `energy_trim_*`, `hard_trim_fallback_segments`
+  - `residual_boundary_collision_*`
 - M3 QA yeni bayraklar:
   - `postfit_segment_ratio_above_max`
   - `postfit_seconds_ratio_above_max`
+  - `hard_trim_fallback_present`
+  - `boundary_start_delay_above_budget_present`
+  - `residual_boundary_collision_present`
+  - `stabilization_retry_rate_high`
 
 ## M3 Benchmark Akisi
 - `cli.benchmark-m3` -> `pipeline.m3_benchmark.run_m3_profile_benchmark`
@@ -231,8 +253,10 @@ Pipeline tabanli, moduler, asamali genisletilebilir bir mimari.
 ## M3 Contract Ozet
 - M3 input stage: `m3_tts_input`
   - Segment alanlari: `id/start/end/duration/target_text/target_word_count`
+  - Optional alanlar: `source_timing_hints`, `boundary_hints`
 - M3 output stage: `m3_tts_output`
   - Segment alanlari: `id/start/end/target_duration/synthesized_duration/duration_delta/target_text/audio_path`
+  - Optional alanlar: `scheduled_start`, `scheduled_end`, `stabilization_applied`, `fit_strategy`
 - Bu sozlesmeler `src/video_translate/tts/contracts.py` icinde.
 
 ## Donanim Profili

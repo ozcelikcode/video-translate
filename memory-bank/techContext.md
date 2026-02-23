@@ -57,6 +57,11 @@
   - `language_consistency_metrics.non_target_like_segment_count`
   - `language_consistency_metrics.non_target_like_segment_ratio`
   - olasi bayrak: `target_language_mismatch_suspected`
+- M2 QA boundary heuristik raporu (fail-free):
+  - `boundary_risk_metrics.pair_count`
+  - `boundary_risk_metrics.high_risk_boundary_count`
+  - `boundary_risk_metrics.high_risk_boundary_ratio`
+  - `boundary_risk_metrics.samples`
 - M2 QA long-segment config:
   - `translate.qa_check_long_segment_fluency`
   - `translate.qa_long_segment_word_threshold`
@@ -115,6 +120,17 @@
   - `tts.qa_max_postfit_seconds_ratio`
   - `tts.qa_fail_on_flags`
   - `tts.qa_allowed_flags`
+  - `tts.boundary_stabilization_enabled`
+  - `tts.boundary_max_gap_borrow_seconds`
+  - `tts.boundary_max_start_delay_seconds`
+  - `tts.boundary_fade_in_ms`
+  - `tts.boundary_fade_out_ms`
+  - `tts.boundary_crossfade_ms`
+  - `tts.boundary_retry_risky_segments`
+  - `tts.boundary_retry_max_passes`
+  - `tts.boundary_energy_trim_enabled`
+  - `tts.boundary_energy_trim_lookback_ms`
+  - `tts.boundary_hard_trim_fallback_enabled`
 - M3 run manifest: `run_m3_manifest.json`
 - M3 benchmark raporu: `benchmarks/m3_profile_benchmark.json`
 - M3 tuning raporu: `benchmarks/m3_tuning_report.md`
@@ -163,6 +179,12 @@
   - kisa kalan segment WAV'lerine sessizlik padding
   - uzun kalan segment WAV'lerinde hard-trim oncesi `ffmpeg atempo` tempo-fit uygulanir
   - run manifest: `duration_postfit` metrikleri (+ `tempo_fit_*`)
+- M3 boundary stabilization (M2+M3):
+  - M2 -> M3 optional `source_timing_hints` tasinabilir
+  - M3 prep `boundary_hints` heuristikleri uretir
+  - M3 output segmentlerinde optional `scheduled_*`, `stabilization_applied`, `fit_strategy` alanlari bulunabilir
+  - `run_m3_manifest.json` `stabilization` bolumu retry/gap-borrow/start-delay/crossfade/energy-trim/hard-trim/collision metriklerini tasir
+  - `m3_qa_report.json` `stabilization_metrics` + yeni quality flags tasir
 - M3 QA post-fit guard:
   - post-fit segment/sure oranlari esik ustundeyse kalite bayragi uretir
 - Piper sure uyumu (yeni):
@@ -173,7 +195,7 @@
   - Opsiyonlar: `--skip-install`, `--no-ui`
 - Piper komut cozumleme:
   - PATH disinda repo ici `.venv/Scripts/piper.exe` ve `.venv/bin/piper` fallback'i desteklenir.
-- Son tam test sonucu: `95 passed` (2026-02-22)
+- Son tam test sonucu: `102 passed` (2026-02-23)
 
 ## Handoff Teknik Notlari
 - M3 icin harici API kullanilmiyor; mevcut backend tamamen yerel dosya uretimi yapiyor.

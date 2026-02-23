@@ -234,6 +234,23 @@ Proje v1 (M1->M3) tamamlandi; uctan uca yerel ve API'siz dublaj akislari calisiy
   - testler:
     - `tests/test_m3_pipeline.py` (tempofit-before-trim + small-overshoot no-trim)
     - `tests/test_tts_backends.py` (piper adaptive length-scale)
+- M2+M3 boundary stabilization patch tamamlandi (kelime/hece kopmasi ve ani gecis azaltma):
+  - `translate.contracts` -> optional `source_timing_hints`
+  - `m3_prep` -> `boundary_hints` (gap budget + continuation risk + boundary cut risk)
+  - `tts.contracts` -> optional `scheduled_start/end`, `stabilization_applied`, `fit_strategy`
+  - `pipeline.m3` -> bounded gap-borrow + bounded start-delay scheduler
+  - `pipeline.m3` -> pipeline-level retry + energy-aware trim fallback + fade/crossfade stitch
+  - `qa.m3_report` -> stabilization telemetri metrikleri ve yeni quality flags
+  - `qa.m2_report` -> fail-free `boundary_risk_metrics`
+  - `config` / GTX1650 profilleri -> `tts.boundary_*` alanlari
+  - test kapsami genisletildi:
+    - `tests/test_translate_contracts.py`
+    - `tests/test_m3_prep.py`
+    - `tests/test_m3_pipeline.py`
+    - `tests/test_m3_qa_report.py`
+    - `tests/test_m2_qa_report.py`
+    - `tests/test_config.py`
+  - tam test sonucu: `python -m pytest -q` -> `102 passed` (2026-02-23)
 - Adlandirma disiplin karari netlestirildi:
   - uretim tarafinda `demo/test` adlari kullanilmaz
   - test kodlari yalnizca `tests/` altinda tutulur
@@ -253,6 +270,7 @@ Proje v1 (M1->M3) tamamlandi; uctan uca yerel ve API'siz dublaj akislari calisiy
 - Son test sonucu (guncel): `90 passed` (2026-02-20).
 - Son test sonucu (guncel): `92 passed` (2026-02-22).
 - Son test sonucu (guncel): `95 passed` (2026-02-22).
+- Son test sonucu (guncel): `102 passed` (2026-02-23).
 
 ## Calisma Agaci Durumu (Handoff)
 - Commit edilmemis degisiklikler mevcut.
@@ -272,6 +290,7 @@ Proje v1 (M1->M3) tamamlandi; uctan uca yerel ve API'siz dublaj akislari calisiy
 
 ## Devam Edenler
 - Bu repo kapsaminda zorunlu gelistirme kalemi kalmadi; yeni iyilestirmeler backlog olarak acilacak.
+- Bu patch icin sonraki dogrulama adimi (opsiyonel): canli ornek videoda manuel dinleme kabul testi + `stabilization` metriklerinin run bazli kontrolu.
 
 ## Siradaki Somut Is
 - Zorunlu bir sonraki adim yok. Yeni is talepleri yeni milestone/backlog olarak planlanacak.
@@ -283,6 +302,10 @@ Proje v1 (M1->M3) tamamlandi; uctan uca yerel ve API'siz dublaj akislari calisiy
 - `M3`: `%100` (closure workflow + otomatik tuning + QA gate + UI + run-dub tek-komut akis + testler tamam)
 - `M4`: `%0` (bu surumde backlog)
 - `M5`: `%0` (bu surumde backlog)
+
+## Tamamlama Durumu (2026-02-23)
+- Genel tamamlanma (v1 kapsam): `%100` (degismedi)
+- Ek kalite/stabilizasyon iyilestirmesi (M2+M3 boundary patch): `%100` (uygulandi + test edildi)
 
 ## M1/M2 Durum Notu
 - M1 ve M2 milestone kabul kriterleri karsilandi ve %100 olarak isaretlendi.

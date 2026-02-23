@@ -13,6 +13,7 @@ class TranslationInputSegment:
     duration: float
     source_text: str
     source_word_count: int
+    source_timing_hints: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -41,6 +42,7 @@ class TranslationOutputSegment:
     source_word_count: int
     target_word_count: int
     length_ratio: float | None
+    source_timing_hints: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -62,6 +64,68 @@ class TranslationOutputDocument:
 
 def _count_words(text: str) -> int:
     return len([part for part in text.split() if part.strip()])
+
+
+def _normalize_optional_timing_hints(value: object) -> dict[str, Any] | None:
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        return None
+    normalized: dict[str, Any] = {}
+    for key, item in value.items():
+        normalized[str(key)] = item
+    return normalized or None
+
+
+def _safe_float(value: object) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _build_source_timing_hints_from_transcript_segment(raw_segment: dict[str, Any]) -> dict[str, Any] | None:
+    words_raw = raw_segment.get("words", None)
+    if not isinstance(words_raw, list) or not words_raw:
+        return None
+    starts: list[float] = []
+    ends: list[float] = []
+    for raw_word in words_raw:
+        if not isinstance(raw_word, dict):
+            continue
+        start = _safe_float(raw_word.get("start"))
+        end = _safe_float(raw_word.get("end"))
+        if start is not None:
+            starts.append(start)
+        if end is not None:
+            ends.append(end)
+    if not starts or not ends:
+        return {
+            "has_word_timestamps": False,
+            "word_count_from_timestamps": 0,
+        }
+    segment_start = _safe_float(raw_segment.get("start"))
+    segment_end = _safe_float(raw_segment.get("end"))
+    first_word_start = min(starts)
+    last_word_end = max(ends)
+    leading_silence = (
+        max(0.0, first_word_start - segment_start)
+        if segment_start is not None
+        else None
+    )
+    trailing_silence = (
+        max(0.0, segment_end - last_word_end)
+        if segment_end is not None
+        else None
+    )
+    return {
+        "has_word_timestamps": True,
+        "first_word_start": first_word_start,
+        "last_word_end": last_word_end,
+        "leading_silence_seconds": leading_silence,
+        "trailing_silence_seconds": trailing_silence,
+        "word_count_from_timestamps": min(len(starts), len(ends)),
+    }
 
 
 def build_translation_input_document(
@@ -86,6 +150,7 @@ def build_translation_input_document(
         duration = max(0.0, end - start)
         source_text = str(raw.get("text", "")).strip()
         source_word_count = _count_words(source_text)
+        source_timing_hints = _build_source_timing_hints_from_transcript_segment(raw)
         segments.append(
             TranslationInputSegment(
                 id=segment_id,
@@ -94,6 +159,7 @@ def build_translation_input_document(
                 duration=duration,
                 source_text=source_text,
                 source_word_count=source_word_count,
+                source_timing_hints=source_timing_hints,
             )
         )
 
@@ -136,6 +202,7 @@ def parse_translation_input_document(payload: dict[str, Any]) -> TranslationInpu
                 duration=max(0.0, float(raw.get("duration", 0.0))),
                 source_text=source_text,
                 source_word_count=int(raw.get("source_word_count", _count_words(source_text))),
+                source_timing_hints=_normalize_optional_timing_hints(raw.get("source_timing_hints")),
             )
         )
 
@@ -189,6 +256,11 @@ def build_translation_output_document(
                 source_word_count=source_segment.source_word_count,
                 target_word_count=target_word_count,
                 length_ratio=_length_ratio(source_segment.source_word_count, target_word_count),
+                source_timing_hints=(
+                    dict(source_segment.source_timing_hints)
+                    if source_segment.source_timing_hints is not None
+                    else None
+                ),
             )
         )
 

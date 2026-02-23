@@ -62,6 +62,37 @@ def _terminal_punctuation(text: str) -> str | None:
     return None
 
 
+def _boundary_tail_risk(text: str) -> float:
+    normalized = text.strip()
+    if not normalized:
+        return 0.0
+    risk = 0.0
+    if normalized.endswith("-"):
+        risk += 0.55
+    if normalized.endswith(("...", "…")):
+        risk += 0.30
+    if normalized.endswith((",", ";", ":")):
+        risk += 0.20
+    if _terminal_punctuation(normalized) is None:
+        risk += 0.22
+    return min(1.0, risk)
+
+
+def _boundary_head_risk(text: str) -> float:
+    normalized = text.strip()
+    if not normalized:
+        return 0.0
+    risk = 0.0
+    if normalized[0].isalpha() and normalized[0].islower():
+        risk += 0.30
+    first_token = normalized.split(" ", 1)[0].lower()
+    if first_token in {"ve", "ama", "veya", "da", "de"}:
+        risk += 0.18
+    if normalized.startswith((",", ";", ":", "-", "—")):
+        risk += 0.22
+    return min(1.0, risk)
+
+
 def build_m2_qa_report(
     doc: TranslationOutputDocument,
     config: TranslateConfig,
@@ -181,6 +212,34 @@ def build_m2_qa_report(
         else 0.0
     )
 
+    boundary_pair_count = 0
+    high_risk_boundary_count = 0
+    boundary_risk_scores: list[float] = []
+    boundary_risk_samples: list[dict[str, object]] = []
+    for prev_segment, next_segment in zip(doc.segments, doc.segments[1:], strict=False):
+        gap_seconds = max(0.0, float(next_segment.start) - float(prev_segment.end))
+        risk = min(
+            1.0,
+            _boundary_tail_risk(prev_segment.target_text)
+            + _boundary_head_risk(next_segment.target_text)
+            + (0.20 if gap_seconds <= 0.12 else 0.0),
+        )
+        boundary_pair_count += 1
+        boundary_risk_scores.append(risk)
+        if risk >= 0.50:
+            high_risk_boundary_count += 1
+            if len(boundary_risk_samples) < 20:
+                boundary_risk_samples.append(
+                    {
+                        "prev_segment_id": prev_segment.id,
+                        "next_segment_id": next_segment.id,
+                        "gap_seconds": gap_seconds,
+                        "risk_score": risk,
+                        "prev_target_text": prev_segment.target_text.strip(),
+                        "next_target_text": next_segment.target_text.strip(),
+                    }
+                )
+
     quality_flags: list[str] = []
     if empty_target_count > 0:
         quality_flags.append("empty_target_segments_present")
@@ -257,6 +316,17 @@ def build_m2_qa_report(
             "non_target_like_segment_ratio": non_target_like_segment_ratio,
             "mismatch_ratio_threshold": _LANGUAGE_MISMATCH_RATIO_THRESHOLD,
             "samples": non_target_like_segment_samples,
+        },
+        "boundary_risk_metrics": {
+            "pair_count": boundary_pair_count,
+            "high_risk_boundary_count": high_risk_boundary_count,
+            "high_risk_boundary_ratio": (
+                high_risk_boundary_count / boundary_pair_count if boundary_pair_count > 0 else 0.0
+            ),
+            "avg_risk_score": mean(boundary_risk_scores) if boundary_risk_scores else 0.0,
+            "max_risk_score": max(boundary_risk_scores) if boundary_risk_scores else 0.0,
+            "high_risk_threshold": 0.50,
+            "samples": boundary_risk_samples,
         },
         "quality_flags": quality_flags,
     }

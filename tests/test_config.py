@@ -59,6 +59,17 @@ def test_load_config_applies_override(tmp_path: Path) -> None:
     assert config.tts.piper_length_scale == 1.0
     assert config.tts.piper_noise_scale == 0.667
     assert config.tts.piper_noise_w == 0.8
+    assert config.tts.boundary_stabilization_enabled is True
+    assert config.tts.boundary_max_gap_borrow_seconds == 0.18
+    assert config.tts.boundary_max_start_delay_seconds == 0.12
+    assert config.tts.boundary_fade_in_ms == 12
+    assert config.tts.boundary_fade_out_ms == 18
+    assert config.tts.boundary_crossfade_ms == 24
+    assert config.tts.boundary_retry_risky_segments is True
+    assert config.tts.boundary_retry_max_passes == 2
+    assert config.tts.boundary_energy_trim_enabled is True
+    assert config.tts.boundary_energy_trim_lookback_ms == 80
+    assert config.tts.boundary_hard_trim_fallback_enabled is True
 
 
 def test_load_config_rejects_non_positive_values(tmp_path: Path) -> None:
@@ -252,6 +263,22 @@ def test_load_config_rejects_tts_postfit_seconds_ratio_above_one(tmp_path: Path)
     )
 
     with pytest.raises(ValueError, match="tts.qa_max_postfit_seconds_ratio"):
+        load_config(override)
+
+
+def test_load_config_rejects_negative_tts_boundary_crossfade_ms(tmp_path: Path) -> None:
+    override = tmp_path / "invalid_tts_boundary_crossfade.toml"
+    override.write_text(
+        "\n".join(
+            [
+                "[tts]",
+                "boundary_crossfade_ms = -1",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="tts.boundary_crossfade_ms"):
         load_config(override)
 
 

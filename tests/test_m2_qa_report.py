@@ -94,6 +94,10 @@ def test_build_m2_qa_report_with_glossary_and_punctuation_flags() -> None:
     flags = report["quality_flags"]
     assert isinstance(flags, list)
     assert "terminal_punctuation_mismatch_present" in flags
+    boundary_metrics = report["boundary_risk_metrics"]
+    assert isinstance(boundary_metrics, dict)
+    assert boundary_metrics["pair_count"] == 1
+
 
 
 def test_build_m2_qa_report_long_segment_fluency_flags() -> None:
@@ -237,3 +241,48 @@ def test_build_m2_qa_report_does_not_flag_language_mismatch_when_tr_text_present
     flags = report["quality_flags"]
     assert isinstance(flags, list)
     assert "target_language_mismatch_suspected" not in flags
+
+
+def test_build_m2_qa_report_includes_boundary_risk_samples() -> None:
+    input_doc = parse_translation_input_document(
+        {
+            "schema_version": "1.0",
+            "stage": "m2_translation_input",
+            "generated_at_utc": "2026-02-23T10:00:00Z",
+            "source_language": "en",
+            "target_language": "tr",
+            "segment_count": 2,
+            "total_source_word_count": 4,
+            "segments": [
+                {
+                    "id": 0,
+                    "start": 0.0,
+                    "end": 1.0,
+                    "duration": 1.0,
+                    "source_text": "Ready to di-",
+                    "source_word_count": 3,
+                },
+                {
+                    "id": 1,
+                    "start": 1.05,
+                    "end": 2.0,
+                    "duration": 0.95,
+                    "source_text": "dive in.",
+                    "source_word_count": 2,
+                },
+            ],
+        }
+    )
+    output_doc = build_translation_output_document(
+        input_doc=input_doc,
+        translated_texts=["dalmaya haz-", "hazirim."],
+        backend="mock",
+    )
+
+    report = build_m2_qa_report(output_doc, _translate_config(), glossary={})
+    boundary_metrics = report["boundary_risk_metrics"]
+    assert boundary_metrics["pair_count"] == 1
+    assert boundary_metrics["high_risk_boundary_count"] == 1
+    assert boundary_metrics["max_risk_score"] >= 0.5
+    assert boundary_metrics["samples"][0]["prev_segment_id"] == 0
+    assert boundary_metrics["samples"][0]["next_segment_id"] == 1

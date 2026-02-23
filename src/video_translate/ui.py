@@ -742,7 +742,7 @@ video-translate run-dub --url "https://www.youtube.com/watch?v=VIDEO_ID" --confi
       <div class="grid">
         <div class="field">
           <label>YouTube URL</label>
-          <input id="sourceUrl" type="text" value="https://www.youtube.com/watch?v=jNQXAC9IVRw" />
+          <input id="sourceUrl" type="text" value="https://www.youtube.com/watch?v=ncjM7mY4LvE" />
         </div>
         <div class="field">
           <label>Workspace Dir (opsiyonel)</label>
