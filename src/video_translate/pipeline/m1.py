@@ -8,9 +8,11 @@ from typing import Callable
 from video_translate.asr.whisper import transcribe_audio
 from video_translate.config import AppConfig
 from video_translate.ingest.audio import normalize_audio_for_asr
-from video_translate.ingest.youtube import download_youtube_source
+from video_translate.ingest.subtitles import build_normalized_subtitle_payload
+from video_translate.ingest.youtube import download_youtube_source, download_youtube_subtitles
 from video_translate.io import create_run_paths, write_json, write_srt, write_transcript_json
 from video_translate.models import M1Artifacts
+from video_translate.pipeline.transcript_fusion import fuse_transcript_with_subtitles
 from video_translate.preflight import PreflightReport
 from video_translate.qa.m1_report import build_m1_qa_report
 
@@ -24,6 +26,11 @@ def _build_run_manifest(
     artifacts: M1Artifacts,
     preflight_report: PreflightReport | None,
     requested_max_video_height: int | None = None,
+    subtitles_normalized_json: Path | None = None,
+    subtitle_summary: dict[str, object] | None = None,
+    fusion_summary: dict[str, object] | None = None,
+    runtime_diagnostics: dict[str, object] | None = None,
+    timings_seconds: dict[str, float] | None = None,
 ) -> dict[str, object]:
     manifest: dict[str, object] = {
         "stage": "m1",
@@ -49,8 +56,17 @@ def _build_run_manifest(
             "transcript_json": str(artifacts.transcript_json),
             "transcript_srt": str(artifacts.transcript_srt) if artifacts.transcript_srt else None,
             "qa_report": str(artifacts.qa_report),
+            "subtitles_normalized_json": str(subtitles_normalized_json) if subtitles_normalized_json else None,
         },
     }
+    if subtitle_summary:
+        manifest["subtitle_summary"] = subtitle_summary
+    if fusion_summary:
+        manifest["fusion_summary"] = fusion_summary
+    if runtime_diagnostics:
+        manifest["runtime_diagnostics"] = runtime_diagnostics
+    if timings_seconds:
+        manifest["timings_seconds"] = timings_seconds
     if preflight_report is not None:
         manifest["preflight"] = {
             "python_version": preflight_report.python_version,
@@ -72,21 +88,56 @@ def run_m1_pipeline(
     preflight_report: PreflightReport | None = None,
     progress_hook: M1ProgressHook | None = None,
     max_video_height: int | None = None,
+    use_youtube_subtitles: bool = True,
+    allow_auto_subtitles: bool = True,
+    subtitle_mode: str = "hybrid",
 ) -> M1Artifacts:
     effective_workspace = workspace_dir or config.pipeline.workspace_dir
     paths = create_run_paths(effective_workspace, run_id)
+    stage_timings: dict[str, float] = {}
+    subtitles_normalized_json: Path | None = None
+    normalized_subtitle_payload: dict[str, object] | None = None
 
     if progress_hook is not None:
         progress_hook("M1: YouTube indiriliyor...")
+    download_start = datetime.now(tz=UTC)
     download = download_youtube_source(
         url=source_url,
         output_dir=paths.input_dir,
         yt_dlp_bin=config.tools.yt_dlp,
         max_video_height=max_video_height,
     )
+    stage_timings["download_source"] = (datetime.now(tz=UTC) - download_start).total_seconds()
+
+    if use_youtube_subtitles and getattr(config, "ingest", None) is not None:
+        subtitles_cfg = config.ingest.subtitles
+        if subtitles_cfg.enabled:
+            if progress_hook is not None:
+                progress_hook("M1: YouTube altyazilari indiriliyor (varsa)...")
+            subtitles_start = datetime.now(tz=UTC)
+            subtitle_download_result = download_youtube_subtitles(
+                url=source_url,
+                output_dir=paths.input_dir / "subtitles",
+                yt_dlp_bin=config.tools.yt_dlp,
+                languages=subtitles_cfg.languages,
+                subtitle_format=subtitles_cfg.format,
+                allow_auto_subtitles=allow_auto_subtitles and subtitles_cfg.allow_auto,
+            )
+            stage_timings["download_subtitles"] = (
+                datetime.now(tz=UTC) - subtitles_start
+            ).total_seconds()
+            manual_path = subtitle_download_result.get("manual")
+            auto_path = subtitle_download_result.get("auto")
+            normalized_subtitle_payload = build_normalized_subtitle_payload(
+                manual_path=manual_path if isinstance(manual_path, Path) else None,
+                auto_path=auto_path if isinstance(auto_path, Path) else None,
+            )
+            subtitles_normalized_json = paths.output_transcript_dir / "subtitles.en.normalized.json"
+            write_json(subtitles_normalized_json, normalized_subtitle_payload)
 
     if progress_hook is not None:
         progress_hook("M1: Ses normalize ediliyor...")
+    normalize_start = datetime.now(tz=UTC)
     normalized_audio = normalize_audio_for_asr(
         ffmpeg_bin=config.tools.ffmpeg,
         input_media=download.media_path,
@@ -95,6 +146,7 @@ def run_m1_pipeline(
         channels=config.pipeline.audio_channels,
         codec=config.pipeline.audio_codec,
     )
+    stage_timings["normalize_audio"] = (datetime.now(tz=UTC) - normalize_start).total_seconds()
 
     if progress_hook is not None:
         progress_hook("M1: ASR basladi (ilk calismada model indirilebilir)...")
@@ -109,24 +161,54 @@ def run_m1_pipeline(
         if progress_hook is not None:
             progress_hook(msg)
 
+    asr_start = datetime.now(tz=UTC)
     transcript_doc = transcribe_audio(
         normalized_audio,
         config.asr,
         on_segment_collected=_on_asr_segment,
         on_progress=_on_asr_progress,
     )
+    stage_timings["asr_transcribe"] = (datetime.now(tz=UTC) - asr_start).total_seconds()
+
+    if normalized_subtitle_payload is not None:
+        if progress_hook is not None:
+            progress_hook("M1: ASR + altyazi hibrit transcript birlestiriliyor...")
+        manual_payload = normalized_subtitle_payload.get("manual", {})
+        auto_payload = normalized_subtitle_payload.get("auto", {})
+        manual_cues = manual_payload.get("cues", []) if isinstance(manual_payload, dict) else []
+        auto_cues = auto_payload.get("cues", []) if isinstance(auto_payload, dict) else []
+        if not isinstance(manual_cues, list):
+            manual_cues = []
+        if not isinstance(auto_cues, list):
+            auto_cues = []
+        transcript_doc = fuse_transcript_with_subtitles(
+            transcript=transcript_doc,
+            manual_cues=manual_cues,
+            auto_cues=auto_cues,
+            subtitle_mode=subtitle_mode,
+            use_subtitles=use_youtube_subtitles,
+            allow_auto_subtitles=allow_auto_subtitles,
+        )
     transcript_json = paths.output_transcript_dir / "transcript.en.json"
     if progress_hook is not None:
         progress_hook("M1: Transcript yaziliyor...")
+    transcript_write_start = datetime.now(tz=UTC)
     write_transcript_json(transcript_json, transcript_doc)
+    stage_timings["write_transcript_json"] = (
+        datetime.now(tz=UTC) - transcript_write_start
+    ).total_seconds()
 
     transcript_srt: Path | None = None
     if emit_srt:
+        srt_start = datetime.now(tz=UTC)
         transcript_srt = paths.output_transcript_dir / "transcript.en.srt"
         write_srt(transcript_srt, transcript_doc.segments)
+        stage_timings["write_transcript_srt"] = (datetime.now(tz=UTC) - srt_start).total_seconds()
 
     qa_report = paths.output_qa_dir / "m1_qa_report.json"
+    qa_start = datetime.now(tz=UTC)
     write_json(qa_report, build_m1_qa_report(transcript_doc))
+    stage_timings["write_qa_report"] = (datetime.now(tz=UTC) - qa_start).total_seconds()
     if progress_hook is not None:
         progress_hook("M1: QA raporu yazildi.")
 
@@ -148,6 +230,17 @@ def run_m1_pipeline(
             artifacts=artifacts,
             preflight_report=preflight_report,
             requested_max_video_height=max_video_height,
+            subtitles_normalized_json=subtitles_normalized_json,
+            subtitle_summary=(
+                transcript_doc.subtitle_summary if isinstance(transcript_doc.subtitle_summary, dict) else None
+            ),
+            fusion_summary=(
+                transcript_doc.fusion_summary if isinstance(transcript_doc.fusion_summary, dict) else None
+            ),
+            runtime_diagnostics=(
+                transcript_doc.runtime_diagnostics if isinstance(transcript_doc.runtime_diagnostics, dict) else None
+            ),
+            timings_seconds=stage_timings,
         ),
     )
     return artifacts

@@ -16,6 +16,8 @@ def build_m3_qa_report(
     postfit_total_padded_seconds: float = 0.0,
     postfit_total_trimmed_seconds: float = 0.0,
     stabilization_metrics: dict[str, Any] | None = None,
+    tts_text_metrics: dict[str, Any] | None = None,
+    pronunciation_metrics: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     absolute_deltas = [abs(segment.duration_delta) for segment in doc.segments]
     target_total_duration = sum(max(0.0, float(segment.target_duration)) for segment in doc.segments)
@@ -70,6 +72,20 @@ def build_m3_qa_report(
         0.0, float(stabilization.get("residual_boundary_collision_max_seconds", 0.0))
     )
     retry_segment_ratio = (retry_applied_segments / doc.segment_count) if doc.segment_count > 0 else 0.0
+    tts_text_payload = tts_text_metrics or {}
+    tts_render_text_present_ratio = max(
+        0.0, float(tts_text_payload.get("tts_render_text_present_ratio", 0.0))
+    )
+    terminal_punctuation_coverage = max(
+        0.0, float(tts_text_payload.get("terminal_punctuation_coverage", 0.0))
+    )
+    pause_punctuation_density = max(
+        0.0, float(tts_text_payload.get("pause_punctuation_density", 0.0))
+    )
+    tts_text_diff_from_target_count = max(
+        0, int(tts_text_payload.get("tts_text_diff_from_target_count", 0))
+    )
+    pronunciation_payload = pronunciation_metrics or {}
 
     quality_flags: list[str] = []
     if out_of_tolerance_count > 0:
@@ -88,6 +104,10 @@ def build_m3_qa_report(
         quality_flags.append("residual_boundary_collision_present")
     if retry_segment_ratio >= 0.50:
         quality_flags.append("stabilization_retry_rate_high")
+    if doc.segment_count > 0 and terminal_punctuation_coverage < 0.50:
+        quality_flags.append("low_tts_punctuation_coverage")
+    if doc.segment_count > 0 and (tts_text_diff_from_target_count / doc.segment_count) > 0.80:
+        quality_flags.append("excessive_tts_text_rewrite_present")
 
     return {
         "stage": "m3",
@@ -132,6 +152,20 @@ def build_m3_qa_report(
             "hard_trim_fallback_segments": hard_trim_fallback_segments,
             "residual_boundary_collision_count": residual_boundary_collision_count,
             "residual_boundary_collision_max_seconds": residual_boundary_collision_max_seconds,
+        },
+        "tts_text_metrics": {
+            "tts_render_text_present_ratio": tts_render_text_present_ratio,
+            "terminal_punctuation_coverage": terminal_punctuation_coverage,
+            "pause_punctuation_density": pause_punctuation_density,
+            "tts_text_diff_from_target_count": tts_text_diff_from_target_count,
+        },
+        "pronunciation_metrics": {
+            "enabled": bool(pronunciation_payload.get("enabled", False)),
+            "lexicon_hit_count": max(0, int(pronunciation_payload.get("lexicon_hit_count", 0))),
+            "auto_rule_hit_count": max(0, int(pronunciation_payload.get("auto_rule_hit_count", 0))),
+            "unresolved_foreign_token_samples": [
+                str(item) for item in (pronunciation_payload.get("unresolved_foreign_token_samples") or [])
+            ],
         },
         "quality_flags": quality_flags,
     }

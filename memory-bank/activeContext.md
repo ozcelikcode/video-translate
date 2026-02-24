@@ -3,6 +3,46 @@
 ## Mevcut Odak
 Proje v1 kapanis durumu: tek komutla uctan uca akisi calisan, QA gate destekli M1->M2->M3 dublaj sistemi.
 Ek odak (kalite): M3 segment sonu kopma ve ani konusmaci gecislerini azaltan boundary-aware stabilizasyon.
+Ek odak (M4 genisletme): hiz gorunurlugu + subtitle hibrit transcript fuzyonu + M2 ceviri kalite katmani (regroup/entity/punctuation) + M3 `tts_render_text`/pronunciation katmani.
+
+## Handoff Snapshot (2026-02-23, M4 Revize Patch)
+- Son test durumu: `python -m pytest -q` -> `116 passed` (2026-02-23).
+- Uygulanan M4 kapsamli patch (buyuk bolum):
+  - `480p` + UI `processing_mode/subtitle_mode/use_youtube_subtitles/allow_auto_subtitles/enable_whisperx_alignment`
+  - YouTube subtitle indirme (`yt-dlp`) + VTT normalize + M1 transcript hibrit fuzyon
+  - M2 translation regroup/split-back + entity preserve + punctuation restoration + `tts_render_text`
+  - M3 `tts_render_text` sentezi + pronunciation normalizer (`lexicon + auto brand rules`) + QA telemetri
+  - UI final payload: `timing_summary`, `runtime_diagnostics`, `subtitle_summary`, `translation_summary`, `tts_text_summary`, `qa_summary`
+- Durum: Kod + testler gecti; canli GTX1650 benchmark/acceptance (8dk/720p hedef 6-10 dk) henuz bu patch turunda tekrar kosulmadi.
+- WhisperX notu (guncel): `asr.alignment_backend=whisperx` artik gercek word-level timing refine dener; hata/kurulum eksiginde graceful fallback ile faster-whisper zamanlari korunur.
+
+## Handoff Snapshot (2026-02-24, M4 Devam)
+- Son test durumu: `python -m pytest -q` -> `118 passed` (2026-02-24).
+- Bu tur odak: M4'te eksik kalan opsiyonel WhisperX forced-alignment refine entegrasyonunu gercek calisir hale getirme.
+- Yapilanlar:
+  - `src/video_translate/asr/whisper.py` icine WhisperX align entegrasyonu eklendi:
+    - faster-whisper segmentleri WhisperX `align(...)` girdisine donusturulur
+    - word-level timing refine transcript segment/word alanlarina geri yazilir
+    - `alignment_device_used`, `alignment_refined_segment_count`, `alignment_refined_word_count`, `alignment_segment_count_mismatch` runtime diagnostikleri eklenir
+    - WhisperX API uyumsuzlugu / paket eksigi / align hatasinda graceful fallback korunur
+  - Yeni test dosyasi: `tests/test_asr_alignment.py`
+    - basarili alignment refine
+    - alignment hatasinda fallback ve orijinal timing korunumu
+- Durum: M4 kod kapsaminda kalan ana opsiyonel teknik madde (WhisperX refine) kapatildi; canli benchmark/acceptance adimlari halen acik.
+
+## Handoff Snapshot (2026-02-24, UI Progress Stabilization)
+- Son test durumu: `python -m pytest -q` -> `119 passed` (2026-02-24).
+- Kullanici geri bildirimi: UI `%33 / M1 ASR` gorunurken terminalde `transformers` model yukleme (M2) loglari goruluyor; "takildi" algisi olusuyor.
+- Kok neden:
+  - gec gelen M1 heartbeat bazen job progress durumunu daha dusuk yuzde/faz ile overwrite edebiliyor (regressive update)
+  - M2/M3 uzun sureli asamalarda heartbeat olmadigi icin UI fazi stale kalabiliyor
+- Yapilan cozum:
+  - `src/video_translate/ui.py` `_update_job(...)` running durumda progress geriye dusmeyecek sekilde monotonic hale getirildi
+  - `execute_youtube_dub_run(...)` M2 ve M3 asamalari icin heartbeat eklendi (`suruyor: Ns`)
+  - M2 faz mesaji ilk calismada model yuklenebilecegini acik belirtiyor
+- Sonuc:
+  - M2 model yukleme/ceviri sirasinda UI stale `%33/M1` gorunme riski belirgin azalir
+  - uzun asamalarda canli heartbeat ile "takildi mi?" algisi azalir
 
 ## Handoff Snapshot (2026-02-23)
 - Son test durumu: `python -m pytest -q` -> `102 passed` (2026-02-23).
@@ -408,8 +448,12 @@ Ek odak (kalite): M3 segment sonu kopma ve ani konusmaci gecislerini azaltan bou
 - Gecici debug ciktilari yalnizca debug amacli ayrik alanda tutulacak.
 
 ## Sonraki Adimlar
-- Bu repo kapsaminda zorunlu teknik adim kalmadi; sonraki isler yeni faz/backlog olarak acilabilir.
-- Bu patch icin en dogru bir sonraki dogrulama: problemli ornek videoda manuel dinleme + `run_m3_manifest.json`/`m3_qa_report.json` stabilizasyon metrik kontrolu.
+- M4 patch kabul dogrulamasi:
+  1. GTX1650 profili ile `run-dub` / UI uzerinden 8dk 720p benchmark (ilk model indirme haric)
+  2. Subtitle bulunan bir ornekte "kacan selamlama" recovery kontrolu
+  3. `Microsoft` vb. marka okunuşu dinleme kontrolu (`piper` profil)
+  4. `m2_qa_report.json` + `m3_qa_report.json` icinde yeni metrik bloklarini kontrol et
+- Opsiyonel sonraki teknik adim: WhisperX quality mode tuning / benchmark (entegrasyon mevcut).
 
 ## Sonraki Model Icin Net Baslangic Akisi
 1. `git status --short` ile degisiklikleri gor.

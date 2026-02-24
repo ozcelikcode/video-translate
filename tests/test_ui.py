@@ -9,7 +9,7 @@ from video_translate.pipeline.delivery import FinalDeliveryArtifacts
 from video_translate.pipeline.m2 import M2Artifacts
 from video_translate.pipeline.m3 import M3Artifacts
 from video_translate.preflight import PreflightReport, ToolCheck
-from video_translate.ui import UIM3Request, execute_m3_run
+from video_translate.ui import UIM3Request, _create_job, _get_job, _update_job, execute_m3_run
 from video_translate.ui import UIYoutubeRequest, _html_page, _resolve_download_path, execute_youtube_dub_run
 
 
@@ -216,6 +216,11 @@ def test_execute_youtube_dub_run_full_chain(tmp_path: Path, monkeypatch) -> None
     assert result["output_dir"] == str(downloads_dir)
     assert result["downloadables"] == [str(final_video)]
     assert result["video_resolution_requested"] == "720p"
+    assert "timing_summary" in result
+    assert "runtime_diagnostics" in result
+    assert result["runtime_diagnostics"]["processing_mode"] == "balanced"
+    assert result["runtime_diagnostics"]["subtitle_mode"] == "hybrid"
+    assert "qa_summary" in result
     assert result["stages"]["m1"]["requested_max_video_height"] == 720
     assert result["stages"]["delivery"]["dubbed_video_mp4"] == str(final_video)
     assert result["stages"]["m3"] is not None
@@ -223,6 +228,17 @@ def test_execute_youtube_dub_run_full_chain(tmp_path: Path, monkeypatch) -> None
     assert progress_events
     assert progress_events[-1][0] == 100
     assert any(percent >= 70 for percent, _ in progress_events)
+
+
+def test_update_job_ignores_regressive_running_progress() -> None:
+    job = _create_job()
+    _update_job(job_id=job.job_id, status="running", progress_percent=50, phase="M2 ceviri calisiyor...")
+    _update_job(job_id=job.job_id, status="running", progress_percent=33, phase="M1 stale heartbeat")
+
+    updated = _get_job(job.job_id)
+    assert updated is not None
+    assert updated.progress_percent == 50
+    assert updated.phase == "M2 ceviri calisiyor..."
 
 
 def test_execute_youtube_dub_run_rejects_mock_tts_backend(monkeypatch) -> None:
@@ -254,10 +270,15 @@ def test_html_page_contains_visible_youtube_controls() -> None:
     assert "YouTube URL" in html
     assert "Downloads Dir" in html
     assert "Video Cozunurluk (YouTube indirme tavani)" in html
+    assert "480p" in html
     assert "720p" in html
     assert "1080p (onerilen)" in html
     assert "1440p" in html
     assert "2160p" in html
+    assert "Calisma Modu" in html
+    assert "Dengeli (onerilen)" in html
+    assert "Subtitle Stratejisi" in html
+    assert "WhisperX hizalama" in html
     assert "YouTube'dan Dublaj Baslat" in html
     assert "Ara dosyalari temizle" in html
     assert "Ana Is Akisi" in html

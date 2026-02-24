@@ -27,6 +27,7 @@ def test_prepare_m3_tts_input_from_translation_output(tmp_path: Path) -> None:
                         "duration": 1.5,
                         "source_text": "hello world",
                         "target_text": "merhaba dunya",
+                        "tts_render_text": "Merhaba dunya.",
                         "source_word_count": 2,
                         "target_word_count": 2,
                         "length_ratio": 1.0,
@@ -50,6 +51,7 @@ def test_prepare_m3_tts_input_from_translation_output(tmp_path: Path) -> None:
     assert payload["segment_count"] == 1
     segment = payload["segments"][0]
     assert segment["target_text"] == "merhaba dunya"
+    assert segment["tts_render_text"] == "Merhaba dunya."
 
 
 def test_prepare_m3_tts_input_adds_boundary_hints_and_preserves_timing_hints(tmp_path: Path) -> None:

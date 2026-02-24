@@ -28,6 +28,37 @@ def test_build_yt_dlp_command_with_resolution_cap_adds_format_filter() -> None:
     assert "height<=1080" in command[format_index + 1]
 
 
+def test_build_yt_dlp_command_supports_480p_resolution_cap() -> None:
+    command = build_yt_dlp_command(
+        yt_dlp_bin="yt-dlp",
+        url="https://example.com/video",
+        output_template=Path("runs/test/source.%(ext)s"),
+        max_video_height=480,
+    )
+    format_index = command.index("--format")
+    assert "height<=480" in command[format_index + 1]
+
+
+def test_build_yt_dlp_command_adds_subtitle_flags() -> None:
+    command = build_yt_dlp_command(
+        yt_dlp_bin="yt-dlp",
+        url="https://example.com/video",
+        output_template=Path("runs/test/source.%(ext)s"),
+        write_info_json=False,
+        skip_download=True,
+        write_subtitles=True,
+        write_auto_subtitles=True,
+        subtitle_languages=("en", "en-*"),
+        subtitle_format="vtt",
+    )
+    assert "--skip-download" in command
+    assert "--write-subs" in command
+    assert "--write-auto-subs" in command
+    assert "--sub-langs" in command
+    assert command[command.index("--sub-langs") + 1] == "en,en-*"
+    assert "--sub-format" in command
+
+
 def test_build_yt_dlp_command_rejects_unsupported_resolution() -> None:
     with pytest.raises(ValueError, match="Unsupported YouTube video height"):
         build_yt_dlp_command(

@@ -98,6 +98,9 @@ def build_m2_qa_report(
     config: TranslateConfig,
     *,
     glossary: dict[str, str] | None = None,
+    translation_unit_metrics: dict[str, Any] | None = None,
+    entity_preservation_metrics: dict[str, Any] | None = None,
+    punctuation_restoration_metrics: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     empty_target_count = sum(1 for segment in doc.segments if not segment.target_text.strip())
     ratios = [segment.length_ratio for segment in doc.segments if segment.length_ratio is not None]
@@ -261,6 +264,11 @@ def build_m2_qa_report(
         and non_target_like_segment_ratio >= _LANGUAGE_MISMATCH_RATIO_THRESHOLD
     ):
         quality_flags.append("target_language_mismatch_suspected")
+    entity_metrics_payload = entity_preservation_metrics or {}
+    expected_entity_hits = int(entity_metrics_payload.get("expected_entity_hits", 0) or 0)
+    matched_entity_hits = int(entity_metrics_payload.get("matched_entity_hits", 0) or 0)
+    if expected_entity_hits > matched_entity_hits:
+        quality_flags.append("entity_preservation_miss_present")
 
     return {
         "stage": "m2",
@@ -316,6 +324,28 @@ def build_m2_qa_report(
             "non_target_like_segment_ratio": non_target_like_segment_ratio,
             "mismatch_ratio_threshold": _LANGUAGE_MISMATCH_RATIO_THRESHOLD,
             "samples": non_target_like_segment_samples,
+        },
+        "translation_unit_metrics": translation_unit_metrics or {
+            "unit_count": doc.segment_count,
+            "multi_segment_unit_count": 0,
+            "avg_segments_per_unit": 1.0 if doc.segment_count > 0 else 0.0,
+            "split_method_counts": {"single": doc.segment_count},
+        },
+        "entity_preservation_metrics": entity_metrics_payload or {
+            "enabled": False,
+            "configured_entity_count": 0,
+            "expected_entity_hits": 0,
+            "matched_entity_hits": 0,
+            "missed_entity_hits": 0,
+            "match_ratio": None,
+            "miss_samples": [],
+        },
+        "punctuation_restoration_metrics": punctuation_restoration_metrics or {
+            "enabled": False,
+            "terminal_restored_count": 0,
+            "pause_punctuation_added_count": 0,
+            "tts_render_text_changed_count": 0,
+            "tts_render_text_present_ratio": 0.0,
         },
         "boundary_risk_metrics": {
             "pair_count": boundary_pair_count,

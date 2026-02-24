@@ -137,6 +137,68 @@ def test_run_m3_pipeline_with_mock_backend(tmp_path: Path) -> None:
     assert manifest_payload["qa_gate"]["enabled"] is False
 
 
+def test_run_m3_pipeline_prefers_tts_render_text_for_synthesis(tmp_path: Path, monkeypatch) -> None:
+    tts_input = tmp_path / "output" / "tts" / "tts_input.tr.json"
+    tts_input.parent.mkdir(parents=True, exist_ok=True)
+    tts_input.write_text(
+        json.dumps(
+            {
+                "schema_version": "1.0",
+                "stage": "m3_tts_input",
+                "generated_at_utc": "2026-02-24T10:00:00Z",
+                "language": "tr",
+                "segment_count": 1,
+                "total_target_word_count": 2,
+                "segments": [
+                    {
+                        "id": 0,
+                        "start": 0.0,
+                        "end": 1.0,
+                        "duration": 1.0,
+                        "target_text": "microsoft burada",
+                        "tts_render_text": "Microsoft burada.",
+                        "target_word_count": 2,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    output_json = tmp_path / "output" / "tts" / "tts_output.tr.json"
+    qa_report_json = tmp_path / "output" / "qa" / "m3_qa_report.json"
+    run_manifest_json = tmp_path / "run_m3_manifest.json"
+    seen_texts: list[str] = []
+
+    class _CaptureBackend:
+        name = "capture"
+
+        def synthesize_to_wav(self, *, text: str, output_wav: Path, target_duration: float, sample_rate: int) -> float:
+            del target_duration
+            seen_texts.append(text)
+            frame_count = int(round(0.5 * sample_rate))
+            output_wav.parent.mkdir(parents=True, exist_ok=True)
+            with wave.open(str(output_wav), "wb") as wav_file:
+                wav_file.setnchannels(1)
+                wav_file.setsampwidth(2)
+                wav_file.setframerate(sample_rate)
+                wav_file.writeframes(b"\x00\x00" * frame_count)
+            return frame_count / sample_rate
+
+    monkeypatch.setattr("video_translate.pipeline.m3.build_tts_backend", lambda *_: _CaptureBackend())
+
+    run_m3_pipeline(
+        tts_input_json_path=tts_input,
+        output_json_path=output_json,
+        qa_report_json_path=qa_report_json,
+        run_manifest_json_path=run_manifest_json,
+        config=_build_app_config(),
+    )
+
+    assert seen_texts
+    assert seen_texts[0].strip()
+    assert "microsoft burada" not in seen_texts[0].lower()
+
+
 def test_run_m3_pipeline_fails_when_qa_gate_blocks_flags(tmp_path: Path) -> None:
     tts_input = tmp_path / "output" / "tts" / "tts_input.tr.json"
     tts_input.parent.mkdir(parents=True, exist_ok=True)

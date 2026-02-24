@@ -20,6 +20,11 @@ class TranscriptSegment:
     end: float
     text: str
     words: list[WordTimestamp]
+    source_evidence: str | None = None
+    subtitle_text: str | None = None
+    subtitle_source: str | None = None
+    fusion_score: float | None = None
+    subtitle_overlap_ratio: float | None = None
 
 
 @dataclass(frozen=True)
@@ -28,6 +33,9 @@ class TranscriptDocument:
     language_probability: float
     duration: float
     segments: list[TranscriptSegment]
+    subtitle_summary: dict[str, Any] | None = None
+    fusion_summary: dict[str, Any] | None = None
+    runtime_diagnostics: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

@@ -28,10 +28,17 @@ def test_load_config_applies_override(tmp_path: Path) -> None:
     assert config.asr.beam_size == 3
     assert config.asr.fallback_on_oom is True
     assert config.asr.fallback_device == "cpu"
+    assert config.asr.alignment_backend == "none"
     assert config.translate.backend == "mock"
     assert config.translate.target_language == "tr"
     assert config.translate.glossary_path is not None
     assert config.translate.glossary_path.name == "glossary.en-tr.json"
+    assert config.translate.entities_path is not None
+    assert config.translate.entities_path.name == "entities.en-tr.json"
+    assert config.translate.apply_entity_preservation is True
+    assert config.translate.regroup_enabled is True
+    assert config.translate.punctuation_restore_enabled is True
+    assert config.translate.generate_tts_render_text is True
     assert config.translate.qa_check_long_segment_fluency is True
     assert config.translate.qa_long_segment_word_threshold == 14
     assert config.translate.qa_long_segment_max_pause_punct == 3
@@ -70,6 +77,12 @@ def test_load_config_applies_override(tmp_path: Path) -> None:
     assert config.tts.boundary_energy_trim_enabled is True
     assert config.tts.boundary_energy_trim_lookback_ms == 80
     assert config.tts.boundary_hard_trim_fallback_enabled is True
+    assert config.tts.pronunciation_enabled is True
+    assert config.tts.pronunciation_lexicon_path is not None
+    assert config.tts.pronunciation_lexicon_path.name == "pronunciation.tr.json"
+    assert config.ingest.subtitles.enabled is True
+    assert config.ingest.subtitles.prefer_manual is True
+    assert config.ingest.subtitles.allow_auto is True
 
 
 def test_load_config_rejects_non_positive_values(tmp_path: Path) -> None:

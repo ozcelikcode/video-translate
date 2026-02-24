@@ -18,8 +18,18 @@ Pipeline tabanli, moduler, asamali genisletilebilir bir mimari.
 - `cli.doctor` -> `preflight.run_preflight`
 - `ingest.youtube.download_youtube_source` ile kaynak medya indirme
   - opsiyonel `max_video_height` ile yt-dlp `height<=N` filtreli kalite tavani uygulanabilir
+- M4 genisletme:
+  - `ingest.youtube.download_youtube_subtitles` ile manuel/auto subtitle (ayri klasorler) indirimi
+  - `ingest.subtitles` ile VTT/SRT normalize parse (`output/transcript/subtitles.en.normalized.json`)
+  - `pipeline.transcript_fusion.fuse_transcript_with_subtitles` ile ASR + subtitle hibrit transcript birlestirme
+  - Transcript JSON root/segment metadata:
+    - root: `subtitle_summary`, `fusion_summary`, `runtime_diagnostics`
+    - segment: `source_evidence`, `subtitle_text`, `subtitle_source`, `fusion_score`, `subtitle_overlap_ratio`
 - `ingest.audio.normalize_audio_for_asr` ile mono 16k WAV uretimi
 - `asr.whisper.transcribe_audio` ile zaman damgali metin cikarma
+  - opsiyonel: `asr.alignment_backend=whisperx` ise faster-whisper cikti segmentleri WhisperX `align(...)` ile word-level refine edilmeye calisilir
+  - align hatasi/paket eksigi durumunda graceful fallback ile original faster-whisper zamanlari korunur
+  - runtime diagnostiklerine alignment backend/device ve refine sayaclari yazilir
 - `io.write_transcript_json` ve `io.write_srt` ile cikti yazimi
 - `qa.m1_report.build_m1_qa_report` ile kalite metrigi cikarma
 - `io.write_json` ile run manifest yazimi
@@ -64,6 +74,12 @@ Pipeline tabanli, moduler, asamali genisletilebilir bir mimari.
 - Ceviri cikti normalizasyonu: yaygin UTF-8 mojibake metinler icin onarim heuristigi
 - Glossary yukleme ve ceviri sonrasi terim duzeltme: `translate.glossary`
 - Hiz optimizasyonu: tekrar eden source segmentleri icin dedup + reuse
+- M4 ceviri kalite katmani:
+  - `translate.regroup` ile segmentler translation-unit bazina regroup edilir
+  - ceviri unit bazinda yapilir, sonra split-back ile segmentlere dagitilir
+  - `translate.entities` ile proper noun/do-not-translate placeholder preserve uygulanir
+  - `translate.punctuation` ile canonical `target_text` noktalama restorasyonu
+  - `tts_render_text` (prosody dostu TTS metni) M2 cikti segmentine optional alan olarak yazilir
 - Cikti: `output/translate/translation_output.en-tr.json`
 - QA: `qa.m2_report.build_m2_qa_report`
 - QA cikti: `output/qa/m2_qa_report.json`
@@ -73,6 +89,9 @@ Pipeline tabanli, moduler, asamali genisletilebilir bir mimari.
   - glossary terim eslesmesi
   - uzun segment akicilik heuristikleri (terminal noktalama eksigi + asiri duraklama noktalama)
   - hedef dil tutarlilik heuristigi (TR hedefte non-Turkce segment yogunlugu)
+  - translation-unit metrikleri (merge/split stats)
+  - entity preservation metrikleri
+  - punctuation restoration / `tts_render_text` metrikleri
 - M2 calisma manifesti: `run_m2_manifest.json` (timing + speed alanlari)
 - M2 QA acceptance gate:
   - QA raporundaki `quality_flags` -> whitelist disinda kalanlar `blocked_flags`
@@ -90,6 +109,7 @@ Pipeline tabanli, moduler, asamali genisletilebilir bir mimari.
 - `cli.prepare-m3` -> `pipeline.m3_prep.prepare_m3_tts_input`
 - M2 translation output JSON'undan TTS giris sozlesmesi uretimi
 - M2'den gelen optional `source_timing_hints` M3 input'a tasinabilir.
+- M4 genisletme: M2 `tts_render_text` optional alanini da M3 input segmentine tasir.
 - M3 prep komsu segmentlerden `boundary_hints` heuristikleri uretir (gap budget + continuation risk + `boundary_cut_risk_score`).
 - Cikti: `output/tts/tts_input.tr.json`
 
@@ -100,6 +120,10 @@ Pipeline tabanli, moduler, asamali genisletilebilir bir mimari.
 - `espeak` sure uyumu: hedef sureye yaklasmak icin adaptif hiz denemeleri (bounded retry)
 - `piper` yuksek kalite ses: ONNX model tabanli yerel sentez (API'siz)
 - `piper` sure uyumu: segment bazli adaptif `length_scale` retry (bounded) ile hedef sureye yaklasma
+- M4 okuma/telaffuz katmani:
+  - Sentez girdisi `target_text` yerine oncelikle `tts_render_text` (varsa)
+  - `tts.text_normalizer` ile pronunciation lexicon + otomatik brand/acronym normalizasyonu
+  - backend'e gore (`espeak`/`piper`) backend-specific pronunciation override destekli
 - Segment bazli WAV ciktilari: `output/tts/segments/seg_XXXXXX.wav`
 - Sure post-fit:
   - tolerans ici kucuk sure sapmalarinda mudahale yok (`tts.max_duration_delta_seconds`)
@@ -123,6 +147,8 @@ Pipeline tabanli, moduler, asamali genisletilebilir bir mimari.
   - bos hedef metin kontrolu
   - post-fit mudahale yogunlugu kontrolu (segment orani + sure orani)
   - stabilization telemetri (retry/gap-borrow/start-delay/crossfade/hard-trim fallback/collision)
+  - `tts_text_metrics` (noktalama kapsami, `tts_render_text` kullanimi)
+  - `pronunciation_metrics` (lexicon/auto-rule hitleri + unresolved foreign token samples)
 - M3 QA acceptance gate:
   - QA raporundaki `quality_flags` -> whitelist disinda kalanlar `blocked_flags`
   - `tts.qa_fail_on_flags=true` ise pipeline `RuntimeError` ile durur
@@ -218,9 +244,18 @@ Pipeline tabanli, moduler, asamali genisletilebilir bir mimari.
   - `queued/running/completed/failed` durumlari
   - `progress_percent` (0-100) + `phase` ile asama bazli canli izleme
   - `completed` durumunda `result` alaninda final YouTube teslim payload'i tasinir
+  - `running` durumda progress guncellemesi monotonic korunur (daha dusuk yuzdeli stale heartbeat overwrite engellenir)
 - YouTube UI akisi ekstra kontrol:
-  - `video_resolution` (`720/1080/1440/2160/source`) alani desteklenir
+  - `video_resolution` (`480/720/1080/1440/2160/source`) alani desteklenir
   - bu alan M1 indirme kalitesi tavanini kontrol eder (ASR hesaplama suresini dogrudan kontrol etmez)
+- M4 UI request kontrolleri:
+  - `processing_mode` (`fast|balanced|quality`)
+  - `subtitle_mode` (`hybrid|subtitle_primary|asr_primary`)
+  - `use_youtube_subtitles`, `allow_auto_subtitles`
+  - `enable_whisperx_alignment` (opsiyonel)
+- M4 UI result ozetleri:
+  - `timing_summary`, `runtime_diagnostics`, `effective_realtime_factor`
+  - `subtitle_summary`, `translation_summary`, `tts_text_summary`, `qa_summary`
 - Final YouTube teslim guvencesi:
   - `execute_youtube_dub_run` akisinda `tts.backend=mock` reddedilir
   - kullaniciya `espeak` profiline gecis mesaji doner

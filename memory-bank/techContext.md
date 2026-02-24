@@ -39,7 +39,13 @@
 - Ingest: harici komutlar (`yt-dlp`, `ffmpeg`)
 - YouTube indirme kalite tavani:
   - `build_yt_dlp_command(..., max_video_height=...)` destekler
-  - desteklenen UI secenekleri: `720`, `1080`, `1440`, `2160` (ve `source`)
+  - desteklenen UI secenekleri: `480`, `720`, `1080`, `1440`, `2160` (ve `source`)
+  - subtitle indirme bayraklari da desteklenir:
+    - `--skip-download`
+    - `--write-subs`
+    - `--write-auto-subs`
+    - `--sub-langs`
+    - `--sub-format`
 - Dis komut katmani: `run_command(..., timeout_seconds=...)` timeout destekler
 - Dis komut katmani UTF-8 text mode kullanir:
   - `run_command(..., input_text=...)` cagrilarinda `encoding="utf-8"` + `errors="replace"`
@@ -52,6 +58,10 @@
 - M2 calistirma: `run-m2` ile ceviri cikti + QA uretimi
 - M2 benchmark: `benchmark-m2` ile profil karsilastirma
 - M2 glossary: `configs/glossary.en-tr.json` (kaynak terim -> hedef terim)
+- M4 entity preserve config:
+  - `configs/entities.en-tr.json` (do-not-translate/proper noun preserve listesi)
+- M4 pronunciation lexicon:
+  - `configs/pronunciation.tr.json` (backend-aware TTS okunuş override)
 - M2 QA: terminal noktalama, glossary eslesme ve uzun segment akicilik metrikleri
 - M2 QA dil tutarlilik metrikleri:
   - `language_consistency_metrics.non_target_like_segment_count`
@@ -62,6 +72,10 @@
   - `boundary_risk_metrics.high_risk_boundary_count`
   - `boundary_risk_metrics.high_risk_boundary_ratio`
   - `boundary_risk_metrics.samples`
+- M2 QA genisletmeleri (M4):
+  - `translation_unit_metrics`
+  - `entity_preservation_metrics`
+  - `punctuation_restoration_metrics`
 - M2 QA long-segment config:
   - `translate.qa_check_long_segment_fluency`
   - `translate.qa_long_segment_word_threshold`
@@ -131,6 +145,7 @@
   - `tts.boundary_energy_trim_enabled`
   - `tts.boundary_energy_trim_lookback_ms`
   - `tts.boundary_hard_trim_fallback_enabled`
+  - `tts.pronunciation.*` (loader tarafinda `TTSConfig` uzerine flatten edilir)
 - M3 run manifest: `run_m3_manifest.json`
 - M3 benchmark raporu: `benchmarks/m3_profile_benchmark.json`
 - M3 tuning raporu: `benchmarks/m3_tuning_report.md`
@@ -164,7 +179,15 @@
   - ilerleme cubugu ve `%` metni canli guncellenir
   - M1 alt-asama callbackleri (download/normalize/asr/transcript/qa) ayrik faz metni olarak gosterilir
   - M1 uzun adimlari icin heartbeat (`suruyor: Ns`) mesaji uretilir
+  - M2/M3 asamalari icin de heartbeat (`suruyor: Ns`) mesaji uretilir
+  - running job progress guncellemesi monotonic korunur (regressive stale heartbeat overwrite engellenir)
   - polling sirasinda canli job payload alani (`status/progress_percent/phase/updated_at_utc`) guncellenir
+  - M4 UI request alanlari:
+    - `processing_mode`
+    - `subtitle_mode`
+    - `use_youtube_subtitles`
+    - `allow_auto_subtitles`
+    - `enable_whisperx_alignment`
 - UI cache politikasi:
   - HTTP yanitlarinda `Cache-Control: no-store`
   - build etiketi: `2026-02-20-final-mp4-downloads`
@@ -185,6 +208,29 @@
   - M3 output segmentlerinde optional `scheduled_*`, `stabilization_applied`, `fit_strategy` alanlari bulunabilir
   - `run_m3_manifest.json` `stabilization` bolumu retry/gap-borrow/start-delay/crossfade/energy-trim/hard-trim/collision metriklerini tasir
   - `m3_qa_report.json` `stabilization_metrics` + yeni quality flags tasir
+- M4 transcript/ceviri/TTS kalite genisletmeleri:
+  - `src/video_translate/ingest/subtitles.py`
+  - `src/video_translate/pipeline/transcript_fusion.py`
+  - `src/video_translate/translate/regroup.py`
+  - `src/video_translate/translate/entities.py`
+  - `src/video_translate/translate/punctuation.py`
+  - `src/video_translate/tts/text_normalizer.py`
+  - `TranslationOutputSegment` optional alanlari:
+    - `tts_render_text`
+    - `translation_unit_id`
+    - `preserved_entities`
+    - `translation_quality_hints`
+  - `TTSInputSegment` optional alan: `tts_render_text`
+  - `TTSOutputSegment` optional alan: `tts_text_used`
+- ASR alignment config (M4):
+  - `asr.alignment_backend = "none" | "whisperx"`
+  - mevcut uygulama: WhisperX opsiyonel forced-alignment refine + graceful fallback
+  - runtime diagnostiklerinde alignment alanlari:
+    - `alignment_applied`
+    - `alignment_device_used`
+    - `alignment_refined_segment_count`
+    - `alignment_refined_word_count`
+    - `alignment_segment_count_mismatch`
 - M3 QA post-fit guard:
   - post-fit segment/sure oranlari esik ustundeyse kalite bayragi uretir
 - Piper sure uyumu (yeni):
@@ -195,7 +241,7 @@
   - Opsiyonlar: `--skip-install`, `--no-ui`
 - Piper komut cozumleme:
   - PATH disinda repo ici `.venv/Scripts/piper.exe` ve `.venv/bin/piper` fallback'i desteklenir.
-- Son tam test sonucu: `102 passed` (2026-02-23)
+- Son tam test sonucu: `119 passed` (2026-02-24)
 
 ## Handoff Teknik Notlari
 - M3 icin harici API kullanilmiyor; mevcut backend tamamen yerel dosya uretimi yapiyor.

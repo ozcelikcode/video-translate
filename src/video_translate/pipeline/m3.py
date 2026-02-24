@@ -17,6 +17,7 @@ from video_translate.tts.contracts import (
     build_tts_output_document,
     parse_tts_input_document,
 )
+from video_translate.tts.text_normalizer import load_pronunciation_lexicon, normalize_tts_text
 from video_translate.utils.subprocess_utils import CommandExecutionError, run_command
 
 
@@ -163,13 +164,14 @@ def _synthesize_with_retry(
     sample_rate: int,
     slot_target_duration: float,
     config: AppConfig,
+    synth_text: str,
     initial_duration: float | None = None,
 ) -> tuple[float, int]:
     duration = (
         float(initial_duration)
         if initial_duration is not None
         else backend.synthesize_to_wav(
-            text=segment.target_text,
+            text=synth_text,
             output_wav=output_wav,
             target_duration=segment.duration,
             sample_rate=sample_rate,
@@ -202,7 +204,7 @@ def _synthesize_with_retry(
         )
         retry_wav = output_wav.with_name(f"{output_wav.stem}.retry_{pass_index+1}.wav")
         retry_duration = backend.synthesize_to_wav(
-            text=segment.target_text,
+            text=synth_text,
             output_wav=retry_wav,
             target_duration=current_target,
             sample_rate=sample_rate,
@@ -565,6 +567,11 @@ def run_m3_pipeline(
     read_seconds = perf_counter() - read_start
 
     backend = build_tts_backend(config.tts)
+    pronunciation_lexicon = (
+        load_pronunciation_lexicon(getattr(config.tts, "pronunciation_lexicon_path", None))
+        if getattr(config.tts, "pronunciation_enabled", True)
+        else []
+    )
     segment_audio_dir = output_json_path.parent / "segments"
     segment_audio_dir.mkdir(parents=True, exist_ok=True)
 
@@ -572,6 +579,7 @@ def run_m3_pipeline(
     segment_audio_paths: list[Path] = []
     synthesized_durations: list[float] = []
     fit_strategies: list[str] = []
+    tts_texts_used: list[str] = []
     duration_padding_applied = 0
     total_padded_seconds = 0.0
     duration_trim_applied = 0
@@ -585,11 +593,47 @@ def run_m3_pipeline(
     retry_total_passes = 0
     gap_borrow_applied_segments = 0
     total_gap_borrowed_seconds = 0.0
+    tts_render_text_present_count = 0
+    tts_text_diff_from_target_count = 0
+    terminal_punctuation_count = 0
+    pause_punctuation_count = 0
+    pronunciation_lexicon_hit_count = 0
+    pronunciation_auto_rule_hit_count = 0
+    unresolved_foreign_tokens: list[str] = []
     duration_tolerance = max(0.0, float(config.tts.max_duration_delta_seconds))
     for segment in input_doc.segments:
         output_wav = segment_audio_dir / f"seg_{segment.id:06d}.wav"
+        render_text = (segment.tts_render_text or "").strip()
+        if render_text:
+            tts_render_text_present_count += 1
+        synth_text = render_text or segment.target_text
+        if synth_text.strip() != segment.target_text.strip():
+            tts_text_diff_from_target_count += 1
+        if synth_text.strip().endswith((".", "!", "?")):
+            terminal_punctuation_count += 1
+        pause_punctuation_count += sum(synth_text.count(mark) for mark in (",", ";", ":"))
+        if getattr(config.tts, "pronunciation_enabled", True):
+            normalized_synth_text, pronunciation_meta = normalize_tts_text(
+                text=synth_text,
+                backend_name=backend.name,
+                lexicon_entries=pronunciation_lexicon,
+                auto_brand_rules_enabled=bool(
+                    getattr(config.tts, "pronunciation_auto_brand_rules_enabled", True)
+                ),
+                backend_specific_overrides_enabled=bool(
+                    getattr(config.tts, "pronunciation_backend_specific_overrides_enabled", True)
+                ),
+            )
+            synth_text = normalized_synth_text
+            pronunciation_lexicon_hit_count += int(pronunciation_meta.get("lexicon_hit_count", 0) or 0)
+            pronunciation_auto_rule_hit_count += int(pronunciation_meta.get("auto_rule_hit_count", 0) or 0)
+            for token in pronunciation_meta.get("unresolved_foreign_token_samples", []) or []:
+                token_text = str(token).strip()
+                if token_text and token_text not in unresolved_foreign_tokens and len(unresolved_foreign_tokens) < 12:
+                    unresolved_foreign_tokens.append(token_text)
+        tts_texts_used.append(synth_text)
         synthesized_duration = backend.synthesize_to_wav(
-            text=segment.target_text,
+            text=synth_text,
             output_wav=output_wav,
             target_duration=segment.duration,
             sample_rate=config.tts.sample_rate,
@@ -607,6 +651,7 @@ def run_m3_pipeline(
             sample_rate=config.tts.sample_rate,
             slot_target_duration=slot_target_duration,
             config=config,
+            synth_text=synth_text,
             initial_duration=synthesized_duration,
         )
         if retry_passes > 0:
@@ -709,6 +754,7 @@ def run_m3_pipeline(
         scheduled_ends=scheduled_ends,
         stabilization_applied_flags=stabilization_applied_flags,
         fit_strategies=fit_strategies,
+        tts_texts_used=tts_texts_used,
     )
     build_output_seconds = perf_counter() - build_output_start
 
@@ -746,6 +792,28 @@ def run_m3_pipeline(
         postfit_total_padded_seconds=total_padded_seconds,
         postfit_total_trimmed_seconds=total_trimmed_seconds,
         stabilization_metrics=stabilization_metrics,
+        tts_text_metrics={
+            "tts_render_text_present_ratio": (
+                tts_render_text_present_count / len(input_doc.segments)
+                if input_doc.segments
+                else 0.0
+            ),
+            "terminal_punctuation_coverage": (
+                terminal_punctuation_count / len(input_doc.segments)
+                if input_doc.segments
+                else 0.0
+            ),
+            "pause_punctuation_density": (
+                pause_punctuation_count / max(1, len(input_doc.segments))
+            ),
+            "tts_text_diff_from_target_count": tts_text_diff_from_target_count,
+        },
+        pronunciation_metrics={
+            "enabled": bool(getattr(config.tts, "pronunciation_enabled", True)),
+            "lexicon_hit_count": pronunciation_lexicon_hit_count,
+            "auto_rule_hit_count": pronunciation_auto_rule_hit_count,
+            "unresolved_foreign_token_samples": unresolved_foreign_tokens,
+        },
     )
     qa_seconds = perf_counter() - qa_start
 
@@ -795,6 +863,28 @@ def run_m3_pipeline(
                 "total_trimmed_seconds": total_trimmed_seconds,
             },
             "stabilization": stabilization_metrics,
+            "tts_text": {
+                "tts_render_text_present_ratio": (
+                    tts_render_text_present_count / len(input_doc.segments)
+                    if input_doc.segments
+                    else 0.0
+                ),
+                "tts_text_diff_from_target_count": tts_text_diff_from_target_count,
+                "terminal_punctuation_coverage": (
+                    terminal_punctuation_count / len(input_doc.segments)
+                    if input_doc.segments
+                    else 0.0
+                ),
+                "pause_punctuation_density": (
+                    pause_punctuation_count / max(1, len(input_doc.segments))
+                ),
+            },
+            "pronunciation": {
+                "enabled": bool(getattr(config.tts, "pronunciation_enabled", True)),
+                "lexicon_hit_count": pronunciation_lexicon_hit_count,
+                "auto_rule_hit_count": pronunciation_auto_rule_hit_count,
+                "unresolved_foreign_token_samples": unresolved_foreign_tokens,
+            },
             "qa_gate": {
                 "enabled": config.tts.qa_fail_on_flags,
                 "passed": qa_gate_passed,

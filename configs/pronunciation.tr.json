@@ -1,0 +1,35 @@
+[
+  {
+    "source_term": "Microsoft",
+    "match_mode": "word",
+    "replacement_text_tr": "Maykrosoft",
+    "espeak_override_text": "Maykrosoft",
+    "piper_raw_phonemes": "m aj k r o s o f t",
+    "priority": 10,
+    "enabled": true
+  },
+  {
+    "source_term": "GitHub",
+    "match_mode": "word",
+    "replacement_text_tr": "GitHab",
+    "espeak_override_text": "GitHab",
+    "priority": 20,
+    "enabled": true
+  },
+  {
+    "source_term": "YouTube",
+    "match_mode": "word",
+    "replacement_text_tr": "Yutub",
+    "espeak_override_text": "Yutub",
+    "priority": 20,
+    "enabled": true
+  },
+  {
+    "source_term": "OpenAI",
+    "match_mode": "word",
+    "replacement_text_tr": "Open Ey Ay",
+    "espeak_override_text": "Open Ey Ay",
+    "priority": 20,
+    "enabled": true
+  }
+]

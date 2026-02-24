@@ -40,6 +40,21 @@ def build_m1_qa_report(doc: TranscriptDocument) -> dict[str, Any]:
     if low_conf_word_ratio is not None and low_conf_word_ratio > 0.20:
         quality_flags.append("high_low_confidence_word_ratio")
 
+    subtitle_summary = doc.subtitle_summary or {}
+    fusion_summary = doc.fusion_summary or {}
+    subtitle_present = bool(subtitle_summary.get("subtitle_present", False))
+    subtitle_manual_present = bool(subtitle_summary.get("subtitle_manual_present", False))
+    subtitle_auto_present = bool(subtitle_summary.get("subtitle_auto_present", False))
+    subtitle_only_recovered_segments = int(fusion_summary.get("subtitle_only_recovered_segments", 0) or 0)
+    asr_subtitle_alignment_coverage_ratio = fusion_summary.get(
+        "subtitle_asr_alignment_coverage_ratio",
+        0.0,
+    )
+    try:
+        asr_subtitle_alignment_coverage_ratio = float(asr_subtitle_alignment_coverage_ratio)
+    except (TypeError, ValueError):
+        asr_subtitle_alignment_coverage_ratio = 0.0
+
     return {
         "stage": "m1",
         "transcript_language": doc.language,
@@ -62,6 +77,17 @@ def build_m1_qa_report(doc: TranscriptDocument) -> dict[str, Any]:
             "min_probability": min(probabilities) if probabilities else None,
             "max_probability": max(probabilities) if probabilities else None,
         },
+        "subtitle_metrics": {
+            "subtitle_present": subtitle_present,
+            "subtitle_manual_present": subtitle_manual_present,
+            "subtitle_auto_present": subtitle_auto_present,
+            "manual_cue_count": int(subtitle_summary.get("manual_cue_count", 0) or 0),
+            "auto_cue_count": int(subtitle_summary.get("auto_cue_count", 0) or 0),
+            "matched_manual_segments": int(subtitle_summary.get("matched_manual_segments", 0) or 0),
+            "matched_auto_segments": int(subtitle_summary.get("matched_auto_segments", 0) or 0),
+            "subtitle_only_recovered_segments": subtitle_only_recovered_segments,
+            "asr_subtitle_alignment_coverage_ratio": asr_subtitle_alignment_coverage_ratio,
+            "fusion_summary": fusion_summary if fusion_summary else None,
+        },
         "quality_flags": quality_flags,
     }
-

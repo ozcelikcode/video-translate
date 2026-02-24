@@ -174,3 +174,5 @@ def test_build_m3_qa_report_includes_stabilization_metrics_and_flags() -> None:
     assert "boundary_start_delay_above_budget_present" in flags
     assert "residual_boundary_collision_present" in flags
     assert "stabilization_retry_rate_high" in flags
+    assert "tts_text_metrics" in report
+    assert "pronunciation_metrics" in report

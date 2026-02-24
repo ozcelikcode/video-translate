@@ -2,6 +2,7 @@
 
 ## Mevcut Durum
 Proje v1 (M1->M3) tamamlandi; uctan uca yerel ve API'siz dublaj akislari calisiyor.
+M4 genisletme calismasi basladi ve buyuk bolumu uygulandi (subtitle hibrit transcript + M2/M3 kalite katmani + UI runtime/quality ozetleri).
 
 ## Tamamlananlar
 - Memory Bank klasor yapisi olusturuldu.
@@ -251,6 +252,59 @@ Proje v1 (M1->M3) tamamlandi; uctan uca yerel ve API'siz dublaj akislari calisiy
     - `tests/test_m2_qa_report.py`
     - `tests/test_config.py`
   - tam test sonucu: `python -m pytest -q` -> `102 passed` (2026-02-23)
+- M4 revize plan (ilk buyuk uygulama turu) hayata gecirildi:
+  - `480p` YouTube cozumurluk secenegi UI + backend seviyesinde aktif (UI'da gorunur)
+  - UI request genisletmeleri:
+    - `processing_mode`
+    - `subtitle_mode`
+    - `use_youtube_subtitles`
+    - `allow_auto_subtitles`
+    - `enable_whisperx_alignment`
+  - UI result genisletmeleri:
+    - `timing_summary`
+    - `runtime_diagnostics`
+    - `subtitle_summary`
+    - `translation_summary`
+    - `tts_text_summary`
+    - `qa_summary`
+  - M1 subtitle hibrit transcript:
+    - `yt-dlp` subtitle indirme bayraklari
+    - `src/video_translate/ingest/subtitles.py` VTT normalize parser
+    - `src/video_translate/pipeline/transcript_fusion.py` (manual > auto > ASR hibrit)
+    - transcript root/segment metadata (`subtitle_summary`, `fusion_summary`, `source_evidence`, vb.)
+    - `output/transcript/subtitles.en.normalized.json` artefakti
+  - M2 ceviri kalite katmani:
+    - `translate.regroup` (translation-unit regroup + split-back)
+    - `translate.entities` (proper noun preserve placeholder masking)
+    - `translate.punctuation` (terminal/pause punctuation + `tts_render_text`)
+    - M2 output contract optional alanlari (`tts_render_text`, `translation_unit_id`, `preserved_entities`, `translation_quality_hints`)
+    - M2 QA yeni metrikleri (`translation_unit_metrics`, `entity_preservation_metrics`, `punctuation_restoration_metrics`)
+  - M3 noktalı okuma + telaffuz:
+    - `tts_render_text` sentez onceligi
+    - `tts.text_normalizer` (lexicon + auto brand/acronym)
+    - `configs/pronunciation.tr.json` + `configs/entities.en-tr.json`
+    - M3 QA yeni metrikleri (`tts_text_metrics`, `pronunciation_metrics`)
+  - Config/public surface genisletildi:
+    - `[ingest.subtitles]`
+    - `[asr].alignment_backend`
+    - `[translate]` entity/regroup/punctuation ayarlari
+    - `[tts.pronunciation]`
+  - test kapsami genisletildi:
+    - yeni test dosyalari: `test_subtitle_parser`, `test_transcript_fusion`, `test_translation_punctuation`, `test_tts_pronunciation`
+    - tam test sonucu: `python -m pytest -q` -> `116 passed` (2026-02-23)
+- M4 devam patch'i (WhisperX alignment refine):
+  - `src/video_translate/asr/whisper.py` icinde `asr.alignment_backend=whisperx` icin gercek word-level timing refine eklendi
+  - WhisperX API farklari (kw arg uyumsuzlugu) ve paket/align hatalarina karsi graceful fallback korundu
+  - runtime diagnostics alignment detaylari genisletildi (`alignment_device_used`, refine sayaclari)
+  - yeni test dosyasi: `tests/test_asr_alignment.py`
+  - tam test sonucu: `python -m pytest -q` -> `118 passed` (2026-02-24)
+- UI progress stabilizasyonu (M2/M3 uzun asama stale gorunumu):
+  - kok neden: gec gelen M1 heartbeat job progress durumunu daha dusuk yuzdeyle overwrite edebiliyordu
+  - `src/video_translate/ui.py::_update_job` running durumda monotonic progress korumasi eklendi (regressive update ignore)
+  - `execute_youtube_dub_run` icine M2 ve M3 heartbeat eklendi (`suruyor: Ns`)
+  - M2 faz metni "ilk calismada model yuklenebilir" notu ile netlestirildi
+  - yeni test: `tests/test_ui.py::test_update_job_ignores_regressive_running_progress`
+  - tam test sonucu: `python -m pytest -q` -> `119 passed` (2026-02-24)
 - Adlandirma disiplin karari netlestirildi:
   - uretim tarafinda `demo/test` adlari kullanilmaz
   - test kodlari yalnizca `tests/` altinda tutulur
@@ -289,8 +343,12 @@ Proje v1 (M1->M3) tamamlandi; uctan uca yerel ve API'siz dublaj akislari calisiy
 - Ayrica bircok dosyada staged olmayan degisiklik var (CLI, config, M2 QA, docs, memory-bank).
 
 ## Devam Edenler
-- Bu repo kapsaminda zorunlu gelistirme kalemi kalmadi; yeni iyilestirmeler backlog olarak acilacak.
-- Bu patch icin sonraki dogrulama adimi (opsiyonel): canli ornek videoda manuel dinleme kabul testi + `stabilization` metriklerinin run bazli kontrolu.
+- M4 kabul/benchmark adimlari:
+  - GTX1650 uzerinde 8dk/720p benchmark (ilk model indirme haric) hedef `6-10 dk`
+  - canli subtitle bulunan videoda "kacan soz" recovery dogrulamasi
+  - `Microsoft` vb. marka telaffuzu manuel dinleme kontrolu (`piper`)
+- Opsiyonel ileri adim:
+  - WhisperX quality mode tuning/benchmark (entegrasyon mevcut)
 
 ## Siradaki Somut Is
 - Zorunlu bir sonraki adim yok. Yeni is talepleri yeni milestone/backlog olarak planlanacak.
@@ -306,6 +364,18 @@ Proje v1 (M1->M3) tamamlandi; uctan uca yerel ve API'siz dublaj akislari calisiy
 ## Tamamlama Durumu (2026-02-23)
 - Genel tamamlanma (v1 kapsam): `%100` (degismedi)
 - Ek kalite/stabilizasyon iyilestirmesi (M2+M3 boundary patch): `%100` (uygulandi + test edildi)
+
+## Tamamlama Durumu (2026-02-23, M4 Revize Patch Sonrasi)
+- Genel tamamlanma (v1 kapsam): `%100` (degismedi)
+- `M4` (hiz/ceviri dogrulugu/noktali okuma/altyazi hibrit ilk tur): `%80`
+  - tamamlananlar: UI/runtime, subtitle hibrit transcript, M2 regroup/entity/punctuation, M3 `tts_render_text` + pronunciation QA
+  - kalanlar: canli benchmark/acceptance kosulari, opsiyonel tam WhisperX alignment refine entegrasyonu, ileri tuning
+
+## Tamamlama Durumu (2026-02-24, M4 Devam Patch Sonrasi)
+- Genel tamamlanma (v1 kapsam): `%100` (degismedi)
+- `M4` (hiz/ceviri dogrulugu/noktali okuma/altyazi hibrit): `%90`
+  - tamamlananlar: onceki M4 patch + gercek WhisperX forced-alignment refine entegrasyonu (feature-flag)
+  - kalanlar: canli GTX1650 benchmark/acceptance dogrulamalari ve profil tuning
 
 ## M1/M2 Durum Notu
 - M1 ve M2 milestone kabul kriterleri karsilandi ve %100 olarak isaretlendi.

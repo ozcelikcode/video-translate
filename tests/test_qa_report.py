@@ -73,3 +73,44 @@ def test_build_m1_qa_report_without_word_timestamps() -> None:
     flags = report["quality_flags"]
     assert isinstance(flags, list)
     assert "empty_segments_present" in flags
+
+
+def test_build_m1_qa_report_includes_subtitle_and_fusion_metrics_when_present() -> None:
+    doc = TranscriptDocument(
+        language="en",
+        language_probability=0.95,
+        duration=3.0,
+        segments=[
+            TranscriptSegment(
+                id=0,
+                start=0.0,
+                end=1.0,
+                text="hello",
+                words=[],
+                source_evidence="subtitle_manual",
+                subtitle_text="hello",
+                subtitle_source="subtitle_manual",
+                fusion_score=1.0,
+                subtitle_overlap_ratio=1.0,
+            )
+        ],
+        subtitle_summary={
+            "subtitle_present": True,
+            "subtitle_manual_present": True,
+            "subtitle_auto_present": False,
+            "manual_cue_count": 1,
+            "auto_cue_count": 0,
+            "matched_manual_segments": 1,
+            "matched_auto_segments": 0,
+        },
+        fusion_summary={
+            "subtitle_only_recovered_segments": 1,
+            "subtitle_asr_alignment_coverage_ratio": 1.0,
+        },
+    )
+
+    report = build_m1_qa_report(doc)
+    subtitle_metrics = report["subtitle_metrics"]
+    assert subtitle_metrics["subtitle_present"] is True
+    assert subtitle_metrics["subtitle_manual_present"] is True
+    assert subtitle_metrics["subtitle_only_recovered_segments"] == 1

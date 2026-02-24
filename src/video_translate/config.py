@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path, PureWindowsPath
 from typing import Any
 
@@ -22,6 +22,21 @@ class PipelineConfig:
 
 
 @dataclass(frozen=True)
+class SubtitleIngestConfig:
+    enabled: bool = True
+    prefer_manual: bool = True
+    allow_auto: bool = True
+    languages: tuple[str, ...] = ("en", "en-*")
+    format: str = "vtt"
+    convert_to: str | None = None
+
+
+@dataclass(frozen=True)
+class IngestConfig:
+    subtitles: SubtitleIngestConfig = field(default_factory=SubtitleIngestConfig)
+
+
+@dataclass(frozen=True)
 class ASRConfig:
     model: str
     device: str
@@ -34,6 +49,7 @@ class ASRConfig:
     fallback_model: str
     fallback_device: str
     fallback_compute_type: str
+    alignment_backend: str = "none"
 
 
 @dataclass(frozen=True)
@@ -63,6 +79,13 @@ class TranslateConfig:
     qa_fail_on_flags: bool
     qa_allowed_flags: tuple[str, ...]
     transformers: TranslateTransformersConfig
+    entities_path: Path | None = None
+    apply_entity_preservation: bool = True
+    regroup_enabled: bool = True
+    regroup_max_segments: int = 4
+    regroup_gap_threshold_seconds: float = 0.65
+    punctuation_restore_enabled: bool = True
+    generate_tts_render_text: bool = True
 
 
 @dataclass(frozen=True)
@@ -103,6 +126,10 @@ class TTSConfig:
     boundary_energy_trim_enabled: bool = True
     boundary_energy_trim_lookback_ms: int = 80
     boundary_hard_trim_fallback_enabled: bool = True
+    pronunciation_enabled: bool = True
+    pronunciation_lexicon_path: Path | None = None
+    pronunciation_auto_brand_rules_enabled: bool = True
+    pronunciation_backend_specific_overrides_enabled: bool = True
 
 
 @dataclass(frozen=True)
@@ -112,6 +139,7 @@ class AppConfig:
     asr: ASRConfig
     translate: TranslateConfig
     tts: TTSConfig
+    ingest: IngestConfig = field(default_factory=IngestConfig)
 
 
 def _required_non_empty_str(value: object, field: str) -> str:
@@ -207,8 +235,11 @@ def load_config(config_path: Path | None = None) -> AppConfig:
     tools_table = data.get("tools", {})
     pipeline_table = data.get("pipeline", {})
     asr_table = data.get("asr", {})
+    ingest_table = data.get("ingest", {})
+    ingest_subtitles_table = ingest_table.get("subtitles", {})
     translate_table = data.get("translate", {})
     tts_table = data.get("tts", {})
+    tts_pronunciation_table = tts_table.get("pronunciation", {})
     translate_transformers_table = translate_table.get("transformers", {})
 
     yt_dlp = _required_non_empty_str(tools_table.get("yt_dlp", "yt-dlp"), "tools.yt_dlp")
@@ -241,6 +272,11 @@ def load_config(config_path: Path | None = None) -> AppConfig:
     fallback_compute_type = _required_non_empty_str(
         asr_table.get("fallback_compute_type", "int8"), "asr.fallback_compute_type"
     )
+    asr_alignment_backend = _required_non_empty_str(
+        asr_table.get("alignment_backend", "none"), "asr.alignment_backend"
+    ).lower()
+    if asr_alignment_backend not in {"none", "whisperx"}:
+        raise ValueError("Config field 'asr.alignment_backend' must be one of: none, whisperx.")
     translate_backend = _required_non_empty_str(
         translate_table.get("backend", "mock"), "translate.backend"
     )
@@ -295,6 +331,15 @@ def load_config(config_path: Path | None = None) -> AppConfig:
         glossary_path = Path(glossary_text) if glossary_text else None
     if glossary_path is not None and not glossary_path.is_absolute():
         glossary_path = root / glossary_path
+    entities_raw = translate_table.get("entities_path", None)
+    entities_path: Path | None
+    if entities_raw is None:
+        entities_path = None
+    else:
+        entities_text = str(entities_raw).strip()
+        entities_path = Path(entities_text) if entities_text else None
+    if entities_path is not None and not entities_path.is_absolute():
+        entities_path = root / entities_path
     glossary_case_sensitive = bool(translate_table.get("glossary_case_sensitive", False))
     apply_glossary_postprocess = bool(translate_table.get("apply_glossary_postprocess", True))
     qa_check_terminal_punctuation = bool(
@@ -315,6 +360,24 @@ def load_config(config_path: Path | None = None) -> AppConfig:
     qa_allowed_flags = _optional_str_tuple(
         translate_table.get("qa_allowed_flags", []),
         "translate.qa_allowed_flags",
+    )
+    translate_apply_entity_preservation = bool(
+        translate_table.get("apply_entity_preservation", True)
+    )
+    translate_regroup_enabled = bool(translate_table.get("regroup_enabled", True))
+    translate_regroup_max_segments = _required_positive_int(
+        translate_table.get("regroup_max_segments", 4),
+        "translate.regroup_max_segments",
+    )
+    translate_regroup_gap_threshold_seconds = _required_non_negative_float(
+        translate_table.get("regroup_gap_threshold_seconds", 0.65),
+        "translate.regroup_gap_threshold_seconds",
+    )
+    translate_punctuation_restore_enabled = bool(
+        translate_table.get("punctuation_restore_enabled", True)
+    )
+    translate_generate_tts_render_text = bool(
+        translate_table.get("generate_tts_render_text", True)
     )
     tts_backend = _required_non_empty_str(tts_table.get("backend", "mock"), "tts.backend")
     if tts_backend not in {"mock", "espeak", "piper"}:
@@ -469,6 +532,51 @@ def load_config(config_path: Path | None = None) -> AppConfig:
     tts_boundary_hard_trim_fallback_enabled = bool(
         tts_table.get("boundary_hard_trim_fallback_enabled", True)
     )
+    tts_pronunciation_enabled = bool(tts_pronunciation_table.get("enabled", True))
+    tts_pronunciation_lexicon_raw = tts_pronunciation_table.get(
+        "lexicon_path",
+        tts_table.get("pronunciation_lexicon_path", "configs/pronunciation.tr.json"),
+    )
+    tts_pronunciation_lexicon_path: Path | None
+    if tts_pronunciation_lexicon_raw is None:
+        tts_pronunciation_lexicon_path = None
+    else:
+        lexicon_text = str(tts_pronunciation_lexicon_raw).strip()
+        tts_pronunciation_lexicon_path = Path(lexicon_text) if lexicon_text else None
+    if (
+        tts_pronunciation_lexicon_path is not None
+        and not tts_pronunciation_lexicon_path.is_absolute()
+    ):
+        tts_pronunciation_lexicon_path = root / tts_pronunciation_lexicon_path
+    tts_pronunciation_auto_brand_rules_enabled = bool(
+        tts_pronunciation_table.get(
+            "auto_brand_rules_enabled",
+            tts_table.get("pronunciation_auto_brand_rules_enabled", True),
+        )
+    )
+    tts_pronunciation_backend_specific_overrides_enabled = bool(
+        tts_pronunciation_table.get(
+            "backend_specific_overrides_enabled",
+            tts_table.get("pronunciation_backend_specific_overrides_enabled", True),
+        )
+    )
+    subtitles_enabled = bool(ingest_subtitles_table.get("enabled", True))
+    subtitles_prefer_manual = bool(ingest_subtitles_table.get("prefer_manual", True))
+    subtitles_allow_auto = bool(ingest_subtitles_table.get("allow_auto", True))
+    subtitles_languages = _optional_str_tuple(
+        ingest_subtitles_table.get("languages", ["en", "en-*"]),
+        "ingest.subtitles.languages",
+    ) or ("en", "en-*")
+    subtitles_format = _required_non_empty_str(
+        ingest_subtitles_table.get("format", "vtt"),
+        "ingest.subtitles.format",
+    )
+    subtitles_convert_to_raw = ingest_subtitles_table.get("convert_to", None)
+    subtitles_convert_to = (
+        _required_non_empty_str(subtitles_convert_to_raw, "ingest.subtitles.convert_to")
+        if subtitles_convert_to_raw is not None and str(subtitles_convert_to_raw).strip()
+        else None
+    )
 
     return AppConfig(
         tools=ToolConfig(
@@ -493,6 +601,7 @@ def load_config(config_path: Path | None = None) -> AppConfig:
             fallback_model=fallback_model,
             fallback_device=fallback_device,
             fallback_compute_type=fallback_compute_type,
+            alignment_backend=asr_alignment_backend,
         ),
         translate=TranslateConfig(
             backend=translate_backend,
@@ -517,6 +626,13 @@ def load_config(config_path: Path | None = None) -> AppConfig:
                 source_lang_code=source_lang_code,
                 target_lang_code=target_lang_code,
             ),
+            entities_path=entities_path,
+            apply_entity_preservation=translate_apply_entity_preservation,
+            regroup_enabled=translate_regroup_enabled,
+            regroup_max_segments=translate_regroup_max_segments,
+            regroup_gap_threshold_seconds=translate_regroup_gap_threshold_seconds,
+            punctuation_restore_enabled=translate_punctuation_restore_enabled,
+            generate_tts_render_text=translate_generate_tts_render_text,
         ),
         tts=TTSConfig(
             backend=tts_backend,
@@ -555,5 +671,21 @@ def load_config(config_path: Path | None = None) -> AppConfig:
             boundary_energy_trim_enabled=tts_boundary_energy_trim_enabled,
             boundary_energy_trim_lookback_ms=tts_boundary_energy_trim_lookback_ms,
             boundary_hard_trim_fallback_enabled=tts_boundary_hard_trim_fallback_enabled,
+            pronunciation_enabled=tts_pronunciation_enabled,
+            pronunciation_lexicon_path=tts_pronunciation_lexicon_path,
+            pronunciation_auto_brand_rules_enabled=tts_pronunciation_auto_brand_rules_enabled,
+            pronunciation_backend_specific_overrides_enabled=(
+                tts_pronunciation_backend_specific_overrides_enabled
+            ),
+        ),
+        ingest=IngestConfig(
+            subtitles=SubtitleIngestConfig(
+                enabled=subtitles_enabled,
+                prefer_manual=subtitles_prefer_manual,
+                allow_auto=subtitles_allow_auto,
+                languages=subtitles_languages,
+                format=subtitles_format,
+                convert_to=subtitles_convert_to,
+            )
         ),
     )

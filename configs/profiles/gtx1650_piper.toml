@@ -7,6 +7,7 @@ fallback_on_oom = true
 fallback_model = "small"
 fallback_device = "cpu"
 fallback_compute_type = "int8"
+alignment_backend = "none"
 
 [translate]
 backend = "transformers"
@@ -18,6 +19,13 @@ max_length_ratio = 1.80
 glossary_path = "configs/glossary.en-tr.json"
 glossary_case_sensitive = false
 apply_glossary_postprocess = true
+entities_path = "configs/entities.en-tr.json"
+apply_entity_preservation = true
+regroup_enabled = true
+regroup_max_segments = 4
+regroup_gap_threshold_seconds = 0.65
+punctuation_restore_enabled = true
+generate_tts_render_text = true
 qa_check_terminal_punctuation = true
 qa_check_long_segment_fluency = true
 qa_long_segment_word_threshold = 14
@@ -31,6 +39,14 @@ device = -1
 max_new_tokens = 192
 source_lang_code = "en"
 target_lang_code = "tr"
+
+[ingest.subtitles]
+enabled = true
+prefer_manual = true
+allow_auto = true
+languages = ["en", "en-*"]
+format = "vtt"
+convert_to = ""
 
 [tts]
 backend = "piper"
@@ -68,3 +84,9 @@ qa_max_postfit_segment_ratio = 0.60
 qa_max_postfit_seconds_ratio = 0.35
 qa_fail_on_flags = false
 qa_allowed_flags = []
+
+[tts.pronunciation]
+enabled = true
+lexicon_path = "configs/pronunciation.tr.json"
+auto_brand_rules_enabled = true
+backend_specific_overrides_enabled = true

@@ -16,6 +16,7 @@ class TTSInputSegment:
     target_word_count: int
     source_timing_hints: dict[str, Any] | None = None
     boundary_hints: dict[str, Any] | None = None
+    tts_render_text: str | None = None
 
 
 @dataclass(frozen=True)
@@ -46,6 +47,7 @@ class TTSOutputSegment:
     scheduled_end: float | None = None
     stabilization_applied: bool = False
     fit_strategy: str = "none"
+    tts_text_used: str | None = None
 
 
 @dataclass(frozen=True)
@@ -78,6 +80,13 @@ def _normalize_optional_dict(value: object) -> dict[str, Any] | None:
     return normalized or None
 
 
+def _normalize_optional_text(value: object) -> str | None:
+    if value is None:
+        return None
+    normalized = str(value).strip()
+    return normalized or None
+
+
 def build_tts_input_document_from_translation_output(
     *,
     translation_output_payload: dict[str, Any],
@@ -102,6 +111,7 @@ def build_tts_input_document_from_translation_output(
         if not isinstance(raw, dict):
             raise ValueError("Each translation output segment must be an object.")
         target_text = str(raw.get("target_text", "")).strip()
+        tts_render_text = _normalize_optional_text(raw.get("tts_render_text"))
         segments.append(
             TTSInputSegment(
                 id=int(raw.get("id", len(segments))),
@@ -112,6 +122,7 @@ def build_tts_input_document_from_translation_output(
                 target_word_count=int(raw.get("target_word_count", _count_words(target_text))),
                 source_timing_hints=_normalize_optional_dict(raw.get("source_timing_hints")),
                 boundary_hints=_normalize_optional_dict(raw.get("boundary_hints")),
+                tts_render_text=tts_render_text,
             )
         )
 
@@ -144,6 +155,7 @@ def parse_tts_input_document(payload: dict[str, Any]) -> TTSInputDocument:
         if not isinstance(raw, dict):
             raise ValueError("Each TTS input segment must be an object.")
         target_text = str(raw.get("target_text", "")).strip()
+        tts_render_text = _normalize_optional_text(raw.get("tts_render_text"))
         start = float(raw.get("start", 0.0))
         end = float(raw.get("end", start))
         duration = max(0.0, float(raw.get("duration", end - start)))
@@ -157,6 +169,7 @@ def parse_tts_input_document(payload: dict[str, Any]) -> TTSInputDocument:
                 target_word_count=int(raw.get("target_word_count", _count_words(target_text))),
                 source_timing_hints=_normalize_optional_dict(raw.get("source_timing_hints")),
                 boundary_hints=_normalize_optional_dict(raw.get("boundary_hints")),
+                tts_render_text=tts_render_text,
             )
         )
 
@@ -187,6 +200,7 @@ def build_tts_output_document(
     scheduled_ends: list[float] | None = None,
     stabilization_applied_flags: list[bool] | None = None,
     fit_strategies: list[str] | None = None,
+    tts_texts_used: list[str | None] | None = None,
 ) -> TTSOutputDocument:
     if len(segment_audio_paths) != len(input_doc.segments):
         raise ValueError("Audio path count must match segment count.")
@@ -200,6 +214,8 @@ def build_tts_output_document(
         raise ValueError("Stabilization flag count must match segment count.")
     if fit_strategies is not None and len(fit_strategies) != len(input_doc.segments):
         raise ValueError("Fit strategy count must match segment count.")
+    if tts_texts_used is not None and len(tts_texts_used) != len(input_doc.segments):
+        raise ValueError("TTS text used count must match segment count.")
 
     segments: list[TTSOutputSegment] = []
     if scheduled_starts is None:
@@ -213,8 +229,13 @@ def build_tts_output_document(
         stabilization_applied_flags = [False] * len(input_doc.segments)
     if fit_strategies is None:
         fit_strategies = ["none"] * len(input_doc.segments)
+    if tts_texts_used is None:
+        tts_texts_used = [
+            (segment.tts_render_text.strip() if segment.tts_render_text else segment.target_text)
+            for segment in input_doc.segments
+        ]
 
-    for segment, audio_path, synthesized_duration, scheduled_start, scheduled_end, stabilization_applied, fit_strategy in zip(
+    for segment, audio_path, synthesized_duration, scheduled_start, scheduled_end, stabilization_applied, fit_strategy, tts_text_used in zip(
         input_doc.segments,
         segment_audio_paths,
         synthesized_durations,
@@ -222,6 +243,7 @@ def build_tts_output_document(
         scheduled_ends,
         stabilization_applied_flags,
         fit_strategies,
+        tts_texts_used,
         strict=True,
     ):
         segments.append(
@@ -238,6 +260,7 @@ def build_tts_output_document(
                 scheduled_end=float(scheduled_end),
                 stabilization_applied=bool(stabilization_applied),
                 fit_strategy=str(fit_strategy),
+                tts_text_used=(str(tts_text_used).strip() if tts_text_used is not None else None),
             )
         )
 

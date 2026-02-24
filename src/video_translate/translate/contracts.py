@@ -43,6 +43,10 @@ class TranslationOutputSegment:
     target_word_count: int
     length_ratio: float | None
     source_timing_hints: dict[str, Any] | None = None
+    tts_render_text: str | None = None
+    translation_unit_id: int | None = None
+    preserved_entities: list[str] | None = None
+    translation_quality_hints: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -74,6 +78,29 @@ def _normalize_optional_timing_hints(value: object) -> dict[str, Any] | None:
     normalized: dict[str, Any] = {}
     for key, item in value.items():
         normalized[str(key)] = item
+    return normalized or None
+
+
+def _normalize_optional_dict(value: object) -> dict[str, Any] | None:
+    if value is None or not isinstance(value, dict):
+        return None
+    normalized: dict[str, Any] = {}
+    for key, item in value.items():
+        normalized[str(key)] = item
+    return normalized or None
+
+
+def _normalize_optional_list_of_str(value: object) -> list[str] | None:
+    if value is None or not isinstance(value, list):
+        return None
+    normalized = [str(item).strip() for item in value if str(item).strip()]
+    return normalized or None
+
+
+def _normalize_optional_text(value: object) -> str | None:
+    if value is None:
+        return None
+    normalized = str(value).strip()
     return normalized or None
 
 
@@ -234,16 +261,60 @@ def build_translation_output_document(
     input_doc: TranslationInputDocument,
     translated_texts: list[str],
     backend: str,
+    tts_render_texts: list[str | None] | None = None,
+    translation_unit_ids: list[int | None] | None = None,
+    preserved_entities_list: list[list[str] | None] | None = None,
+    translation_quality_hints_list: list[dict[str, Any] | None] | None = None,
 ) -> TranslationOutputDocument:
     if len(translated_texts) != len(input_doc.segments):
         raise ValueError(
             "Translated text count does not match input segment count: "
             f"{len(translated_texts)} != {len(input_doc.segments)}"
         )
+    if tts_render_texts is not None and len(tts_render_texts) != len(input_doc.segments):
+        raise ValueError("TTS render text count must match input segment count.")
+    if translation_unit_ids is not None and len(translation_unit_ids) != len(input_doc.segments):
+        raise ValueError("Translation unit id count must match input segment count.")
+    if preserved_entities_list is not None and len(preserved_entities_list) != len(input_doc.segments):
+        raise ValueError("Preserved entities count must match input segment count.")
+    if (
+        translation_quality_hints_list is not None
+        and len(translation_quality_hints_list) != len(input_doc.segments)
+    ):
+        raise ValueError("Translation quality hints count must match input segment count.")
 
     output_segments: list[TranslationOutputSegment] = []
-    for source_segment, translated_text in zip(input_doc.segments, translated_texts, strict=True):
+    if tts_render_texts is None:
+        tts_render_texts = [None] * len(input_doc.segments)
+    if translation_unit_ids is None:
+        translation_unit_ids = [None] * len(input_doc.segments)
+    if preserved_entities_list is None:
+        preserved_entities_list = [None] * len(input_doc.segments)
+    if translation_quality_hints_list is None:
+        translation_quality_hints_list = [None] * len(input_doc.segments)
+
+    for (
+        source_segment,
+        translated_text,
+        tts_render_text,
+        translation_unit_id,
+        preserved_entities,
+        translation_quality_hints,
+    ) in zip(
+        input_doc.segments,
+        translated_texts,
+        tts_render_texts,
+        translation_unit_ids,
+        preserved_entities_list,
+        translation_quality_hints_list,
+        strict=True,
+    ):
         normalized_target = translated_text.strip()
+        normalized_tts_render = (
+            str(tts_render_text).strip()
+            if tts_render_text is not None and str(tts_render_text).strip()
+            else None
+        )
         target_word_count = _count_words(normalized_target)
         output_segments.append(
             TranslationOutputSegment(
@@ -261,6 +332,18 @@ def build_translation_output_document(
                     if source_segment.source_timing_hints is not None
                     else None
                 ),
+                tts_render_text=normalized_tts_render,
+                translation_unit_id=int(translation_unit_id) if translation_unit_id is not None else None,
+                preserved_entities=(
+                    [item for item in (preserved_entities or []) if str(item).strip()]
+                    if preserved_entities is not None
+                    else None
+                ),
+                translation_quality_hints=(
+                    dict(translation_quality_hints)
+                    if translation_quality_hints is not None
+                    else None
+                ),
             )
         )
 
@@ -275,4 +358,71 @@ def build_translation_output_document(
         total_source_word_count=sum(segment.source_word_count for segment in output_segments),
         total_target_word_count=sum(segment.target_word_count for segment in output_segments),
         segments=output_segments,
+    )
+
+
+def parse_translation_output_document(payload: dict[str, Any]) -> TranslationOutputDocument:
+    stage = str(payload.get("stage", "")).strip()
+    if stage != "m2_translation_output":
+        raise ValueError("Expected stage 'm2_translation_output'.")
+
+    source_language = str(payload.get("source_language", "")).strip()
+    target_language = str(payload.get("target_language", "")).strip()
+    backend = str(payload.get("backend", "")).strip()
+    if not source_language or not target_language or not backend:
+        raise ValueError("Output contract requires backend, source_language, and target_language.")
+
+    segments_payload = payload.get("segments", [])
+    if not isinstance(segments_payload, list):
+        raise ValueError("Output contract field 'segments' must be a list.")
+
+    segments: list[TranslationOutputSegment] = []
+    for raw in segments_payload:
+        if not isinstance(raw, dict):
+            raise ValueError("Each output segment must be an object.")
+        source_text = str(raw.get("source_text", "")).strip()
+        target_text = str(raw.get("target_text", "")).strip()
+        target_word_count = int(raw.get("target_word_count", _count_words(target_text)))
+        segments.append(
+            TranslationOutputSegment(
+                id=int(raw.get("id", len(segments))),
+                start=float(raw.get("start", 0.0)),
+                end=float(raw.get("end", 0.0)),
+                duration=max(0.0, float(raw.get("duration", 0.0))),
+                source_text=source_text,
+                target_text=target_text,
+                source_word_count=int(raw.get("source_word_count", _count_words(source_text))),
+                target_word_count=target_word_count,
+                length_ratio=(
+                    None
+                    if raw.get("length_ratio") is None
+                    else float(raw.get("length_ratio"))
+                ),
+                source_timing_hints=_normalize_optional_timing_hints(raw.get("source_timing_hints")),
+                tts_render_text=_normalize_optional_text(raw.get("tts_render_text")),
+                translation_unit_id=(
+                    int(raw.get("translation_unit_id"))
+                    if raw.get("translation_unit_id") is not None
+                    else None
+                ),
+                preserved_entities=_normalize_optional_list_of_str(raw.get("preserved_entities")),
+                translation_quality_hints=_normalize_optional_dict(raw.get("translation_quality_hints")),
+            )
+        )
+
+    return TranslationOutputDocument(
+        schema_version=str(payload.get("schema_version", "1.0")),
+        stage=stage,
+        generated_at_utc=str(payload.get("generated_at_utc", "")),
+        backend=backend,
+        source_language=source_language,
+        target_language=target_language,
+        segment_count=int(payload.get("segment_count", len(segments))),
+        total_source_word_count=int(
+            payload.get("total_source_word_count", sum(segment.source_word_count for segment in segments))
+        ),
+        total_target_word_count=int(
+            payload.get("total_target_word_count", sum(segment.target_word_count for segment in segments))
+        ),
+        segments=segments,
     )

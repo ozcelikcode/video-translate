@@ -286,3 +286,6 @@ def test_build_m2_qa_report_includes_boundary_risk_samples() -> None:
     assert boundary_metrics["max_risk_score"] >= 0.5
     assert boundary_metrics["samples"][0]["prev_segment_id"] == 0
     assert boundary_metrics["samples"][0]["next_segment_id"] == 1
+    assert "translation_unit_metrics" in report
+    assert "entity_preservation_metrics" in report
+    assert "punctuation_restoration_metrics" in report

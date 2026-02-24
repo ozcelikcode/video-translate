@@ -141,6 +141,8 @@ def test_run_m2_pipeline_with_mock_backend(tmp_path: Path) -> None:
     assert output_payload["stage"] == "m2_translation_output"
     assert output_payload["backend"] == "mock"
     assert output_payload["segment_count"] == 2
+    assert "translation_unit_id" in output_payload["segments"][0]
+    assert "tts_render_text" in output_payload["segments"][0]
 
     qa_payload = json.loads(qa_report_json.read_text(encoding="utf-8"))
     assert qa_payload["stage"] == "m2"
@@ -153,6 +155,7 @@ def test_run_m2_pipeline_with_mock_backend(tmp_path: Path) -> None:
     assert manifest_payload["stage"] == "m2"
     assert "timings_seconds" in manifest_payload
     assert "speed" in manifest_payload
+    assert "translation_units" in manifest_payload
     assert manifest_payload["speed"]["translation_reuse_count"] == 1
     assert "qa_gate" in manifest_payload
 

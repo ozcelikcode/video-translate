@@ -5,7 +5,7 @@ import mimetypes
 import threading
 import time
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -67,6 +67,11 @@ class UIYoutubeRequest:
     run_m3: bool
     max_video_height: int | None = None
     cleanup_intermediate: bool = True
+    processing_mode: str = "balanced"
+    subtitle_mode: str = "hybrid"
+    use_youtube_subtitles: bool = True
+    allow_auto_subtitles: bool = True
+    enable_whisperx_alignment: bool = False
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -142,7 +147,7 @@ def _parse_video_resolution_height(raw_value: str | None) -> int | None:
         parsed = int(normalized)
     except ValueError as exc:
         raise ValueError(
-            "video_resolution must be one of: source, 720, 1080, 1440, 2160."
+            "video_resolution must be one of: source, 480, 720, 1080, 1440, 2160."
         ) from exc
     if parsed not in SUPPORTED_VIDEO_HEIGHT_OPTIONS:
         supported = ", ".join(str(value) for value in SUPPORTED_VIDEO_HEIGHT_OPTIONS)
@@ -154,6 +159,82 @@ def _notify_progress(progress_hook: ProgressHook | None, percent: int, phase: st
     if progress_hook is None:
         return
     progress_hook(_clamp_percent(percent), phase.strip() or "Calisiyor...")
+
+
+def _normalize_processing_mode(raw_mode: str | None) -> str:
+    normalized = (raw_mode or "balanced").strip().lower()
+    if normalized not in {"fast", "balanced", "quality"}:
+        raise ValueError("processing_mode must be one of: fast, balanced, quality.")
+    return normalized
+
+
+def _normalize_subtitle_mode(raw_mode: str | None) -> str:
+    normalized = (raw_mode or "hybrid").strip().lower()
+    if normalized not in {"hybrid", "subtitle_primary", "asr_primary"}:
+        raise ValueError("subtitle_mode must be one of: hybrid, subtitle_primary, asr_primary.")
+    return normalized
+
+
+def _apply_processing_mode_overrides(config: Any, processing_mode: str) -> Any:
+    mode = _normalize_processing_mode(processing_mode)
+    if mode == "balanced":
+        return config
+    if mode == "fast":
+        updated_asr = replace(
+            config.asr,
+            beam_size=max(1, min(config.asr.beam_size, 3)),
+        )
+        updated_translate = replace(
+            config.translate,
+            batch_size=max(config.translate.batch_size, 8),
+        )
+        updated_tts = replace(
+            config.tts,
+            boundary_retry_max_passes=max(0, min(config.tts.boundary_retry_max_passes, 1)),
+        )
+        return replace(config, asr=updated_asr, translate=updated_translate, tts=updated_tts)
+    # quality
+    updated_asr = replace(config.asr, beam_size=max(config.asr.beam_size, 7))
+    updated_tts = replace(
+        config.tts,
+        boundary_retry_max_passes=max(config.tts.boundary_retry_max_passes, 3),
+        boundary_crossfade_ms=max(config.tts.boundary_crossfade_ms, 32),
+    )
+    return replace(config, asr=updated_asr, tts=updated_tts)
+
+
+def _safe_load_json(path: Path) -> dict[str, Any] | None:
+    if not path.exists():
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def _build_timing_summary(
+    *,
+    started_at: float,
+    m1_seconds: float,
+    m2_seconds: float,
+    m3_seconds: float,
+    delivery_seconds: float,
+    transcript_duration_seconds: float | None,
+) -> dict[str, Any]:
+    total_pipeline_seconds = max(0.0, time.monotonic() - started_at)
+    effective_realtime_factor: float | None = None
+    if transcript_duration_seconds is not None and transcript_duration_seconds > 0.0 and total_pipeline_seconds > 0.0:
+        effective_realtime_factor = transcript_duration_seconds / total_pipeline_seconds
+    return {
+        "m1_total_seconds": m1_seconds,
+        "m2_total_seconds": m2_seconds,
+        "m3_total_seconds": m3_seconds,
+        "delivery_total_seconds": delivery_seconds,
+        "total_pipeline_seconds": total_pipeline_seconds,
+        "transcript_duration_seconds": transcript_duration_seconds,
+        "effective_realtime_factor": effective_realtime_factor,
+    }
 
 
 def _ensure_non_mock_tts_backend_for_final_flow(backend_name: str) -> None:
@@ -246,6 +327,7 @@ def execute_youtube_dub_run(
     request: UIYoutubeRequest,
     progress_hook: ProgressHook | None = None,
 ) -> dict[str, Any]:
+    pipeline_started_monotonic = time.monotonic()
     source_url = request.source_url.strip()
     if not source_url:
         raise ValueError("source_url is required.")
@@ -254,6 +336,11 @@ def execute_youtube_dub_run(
 
     _notify_progress(progress_hook, 5, "On kontroller hazirlaniyor...")
     config = load_config(request.config_path)
+    selected_processing_mode = _normalize_processing_mode(request.processing_mode)
+    selected_subtitle_mode = _normalize_subtitle_mode(request.subtitle_mode)
+    config = _apply_processing_mode_overrides(config, selected_processing_mode)
+    if request.enable_whisperx_alignment:
+        config = replace(config, asr=replace(config.asr, alignment_backend="whisperx"))
     _ensure_non_mock_tts_backend_for_final_flow(config.tts.backend)
     target_lang = request.target_lang.strip() or config.translate.target_language
     resolution_label = _format_video_resolution_label(request.max_video_height)
@@ -347,6 +434,7 @@ def execute_youtube_dub_run(
     m1_heartbeat_thread = threading.Thread(target=_m1_heartbeat, daemon=True)
     m1_heartbeat_thread.start()
 
+    m1_stage_start = time.monotonic()
     try:
         m1_artifacts = run_m1_pipeline(
             source_url=source_url,
@@ -357,10 +445,14 @@ def execute_youtube_dub_run(
             preflight_report=preflight_report,
             progress_hook=_m1_progress,
             max_video_height=request.max_video_height,
+            use_youtube_subtitles=request.use_youtube_subtitles,
+            allow_auto_subtitles=request.allow_auto_subtitles,
+            subtitle_mode=selected_subtitle_mode,
         )
     finally:
         m1_stop_event.set()
         m1_heartbeat_thread.join(timeout=0.1)
+    m1_seconds = max(0.0, time.monotonic() - m1_stage_start)
     _notify_progress(progress_hook, 38, "M1 tamamlandi.")
     run_root = m1_artifacts.run_root
     m2_input = run_root / "output" / "translate" / f"translation_input.en-{target_lang}.json"
@@ -373,15 +465,39 @@ def execute_youtube_dub_run(
         output_json_path=m2_input,
         target_language=target_lang,
     )
-    _notify_progress(progress_hook, 50, "M2 ceviri calisiyor...")
-    m2_artifacts = run_m2_pipeline(
-        translation_input_json_path=m2_input,
-        output_json_path=m2_output,
-        qa_report_json_path=m2_qa,
-        run_manifest_json_path=m2_manifest,
-        config=config,
-        target_language_override=target_lang,
-    )
+    m2_progress_state: dict[str, Any] = {
+        "percent": 50,
+        "phase": "M2 ceviri calisiyor... (ilk calismada model yuklenebilir)",
+    }
+    _notify_progress(progress_hook, 50, str(m2_progress_state["phase"]))
+    m2_stop_event = threading.Event()
+
+    def _m2_heartbeat() -> None:
+        start_time = time.monotonic()
+        while not m2_stop_event.wait(8.0):
+            elapsed_seconds = int(time.monotonic() - start_time)
+            _notify_progress(
+                progress_hook,
+                int(m2_progress_state["percent"]),
+                f"{m2_progress_state['phase']} (suruyor: {elapsed_seconds}s)",
+            )
+
+    m2_heartbeat_thread = threading.Thread(target=_m2_heartbeat, daemon=True)
+    m2_heartbeat_thread.start()
+    m2_stage_start = time.monotonic()
+    try:
+        m2_artifacts = run_m2_pipeline(
+            translation_input_json_path=m2_input,
+            output_json_path=m2_output,
+            qa_report_json_path=m2_qa,
+            run_manifest_json_path=m2_manifest,
+            config=config,
+            target_language_override=target_lang,
+        )
+    finally:
+        m2_stop_event.set()
+        m2_heartbeat_thread.join(timeout=0.1)
+    m2_seconds = max(0.0, time.monotonic() - m2_stage_start)
     _notify_progress(progress_hook, 64, "M2 tamamlandi.")
 
     m2_payload = {
@@ -398,17 +514,42 @@ def execute_youtube_dub_run(
     m3_output = run_root / "output" / "tts" / f"tts_output.{target_lang}.json"
     m3_qa = run_root / "output" / "qa" / "m3_qa_report.json"
     m3_manifest = run_root / "run_m3_manifest.json"
-    _notify_progress(progress_hook, 76, "M3 TTS dublaj uretiliyor...")
-    m3_artifacts = run_m3_pipeline(
-        tts_input_json_path=m3_input,
-        output_json_path=m3_output,
-        qa_report_json_path=m3_qa,
-        run_manifest_json_path=m3_manifest,
-        config=config,
-    )
+    m3_progress_state: dict[str, Any] = {
+        "percent": 76,
+        "phase": "M3 TTS dublaj uretiliyor...",
+    }
+    _notify_progress(progress_hook, 76, str(m3_progress_state["phase"]))
+    m3_stop_event = threading.Event()
+
+    def _m3_heartbeat() -> None:
+        start_time = time.monotonic()
+        while not m3_stop_event.wait(8.0):
+            elapsed_seconds = int(time.monotonic() - start_time)
+            _notify_progress(
+                progress_hook,
+                int(m3_progress_state["percent"]),
+                f"{m3_progress_state['phase']} (suruyor: {elapsed_seconds}s)",
+            )
+
+    m3_heartbeat_thread = threading.Thread(target=_m3_heartbeat, daemon=True)
+    m3_heartbeat_thread.start()
+    m3_stage_start = time.monotonic()
+    try:
+        m3_artifacts = run_m3_pipeline(
+            tts_input_json_path=m3_input,
+            output_json_path=m3_output,
+            qa_report_json_path=m3_qa,
+            run_manifest_json_path=m3_manifest,
+            config=config,
+        )
+    finally:
+        m3_stop_event.set()
+        m3_heartbeat_thread.join(timeout=0.1)
+    m3_seconds = max(0.0, time.monotonic() - m3_stage_start)
     _notify_progress(progress_hook, 90, "Final MP4 teslimi hazirlaniyor...")
 
     selected_downloads_dir = request.downloads_dir or Path("downloads")
+    delivery_stage_start = time.monotonic()
     delivery = deliver_final_video(
         run_root=run_root,
         source_video=m1_artifacts.source_media,
@@ -418,7 +559,81 @@ def execute_youtube_dub_run(
         downloads_root=selected_downloads_dir,
         cleanup_intermediate=request.cleanup_intermediate,
     )
+    delivery_seconds = max(0.0, time.monotonic() - delivery_stage_start)
     _notify_progress(progress_hook, 100, "Final Turkce dublajli video hazir.")
+
+    transcript_payload = _safe_load_json(m1_artifacts.transcript_json)
+    transcript_duration_seconds: float | None = None
+    if transcript_payload is not None:
+        raw_duration = transcript_payload.get("duration")
+        try:
+            transcript_duration_seconds = float(raw_duration) if raw_duration is not None else None
+        except (TypeError, ValueError):
+            transcript_duration_seconds = None
+    timing_summary = _build_timing_summary(
+        started_at=pipeline_started_monotonic,
+        m1_seconds=m1_seconds,
+        m2_seconds=m2_seconds,
+        m3_seconds=m3_seconds,
+        delivery_seconds=delivery_seconds,
+        transcript_duration_seconds=transcript_duration_seconds,
+    )
+    asr_cfg = getattr(config, "asr", None)
+    translate_cfg = getattr(config, "translate", None)
+    tts_cfg = getattr(config, "tts", None)
+    runtime_diagnostics = {
+        "processing_mode": selected_processing_mode,
+        "subtitle_mode": selected_subtitle_mode,
+        "use_youtube_subtitles": bool(request.use_youtube_subtitles),
+        "allow_auto_subtitles": bool(request.allow_auto_subtitles),
+        "enable_whisperx_alignment": bool(request.enable_whisperx_alignment),
+        "asr_device_configured": getattr(asr_cfg, "device", None),
+        "asr_fallback_enabled": bool(getattr(asr_cfg, "fallback_on_oom", False)),
+        "asr_alignment_backend": getattr(asr_cfg, "alignment_backend", "none"),
+        "translate_backend_used": getattr(translate_cfg, "backend", None),
+        "translate_device_used": getattr(getattr(translate_cfg, "transformers", None), "device", None),
+        "tts_backend_used": getattr(tts_cfg, "backend", None),
+        "speed_target_minutes_for_8m_video": "6-10",
+    }
+    if transcript_payload is not None:
+        transcript_runtime = transcript_payload.get("runtime_diagnostics")
+        if isinstance(transcript_runtime, dict):
+            runtime_diagnostics["asr_runtime"] = transcript_runtime
+            runtime_diagnostics["asr_device_used"] = transcript_runtime.get("device_used")
+            runtime_diagnostics["asr_fallback_used"] = transcript_runtime.get("fallback_used")
+        subtitle_summary_payload = transcript_payload.get("subtitle_summary")
+        if isinstance(subtitle_summary_payload, dict):
+            runtime_diagnostics["subtitle_source_detected"] = {
+                "manual": bool(subtitle_summary_payload.get("subtitle_manual_present")),
+                "auto": bool(subtitle_summary_payload.get("subtitle_auto_present")),
+            }
+
+    m1_qa_payload = _safe_load_json(m1_artifacts.qa_report) or {}
+    m2_qa_payload = _safe_load_json(m2_artifacts.qa_report_json) or {}
+    m3_qa_payload = _safe_load_json(m3_artifacts.qa_report_json) or {}
+    subtitle_summary = (
+        transcript_payload.get("subtitle_summary")
+        if isinstance(transcript_payload, dict) and isinstance(transcript_payload.get("subtitle_summary"), dict)
+        else m1_qa_payload.get("subtitle_metrics")
+    )
+    translation_summary = {
+        "quality_flags": m2_qa_payload.get("quality_flags", []),
+        "language_consistency_metrics": m2_qa_payload.get("language_consistency_metrics"),
+        "terminology_metrics": m2_qa_payload.get("terminology_metrics"),
+        "entity_preservation_metrics": m2_qa_payload.get("entity_preservation_metrics"),
+        "translation_unit_metrics": m2_qa_payload.get("translation_unit_metrics"),
+        "punctuation_restoration_metrics": m2_qa_payload.get("punctuation_restoration_metrics"),
+    }
+    tts_text_summary = {
+        "tts_text_metrics": m3_qa_payload.get("tts_text_metrics"),
+        "pronunciation_metrics": m3_qa_payload.get("pronunciation_metrics"),
+        "quality_flags": m3_qa_payload.get("quality_flags", []),
+    }
+    qa_summary = {
+        "m1_quality_flags": m1_qa_payload.get("quality_flags", []),
+        "m2_quality_flags": m2_qa_payload.get("quality_flags", []),
+        "m3_quality_flags": m3_qa_payload.get("quality_flags", []),
+    }
 
     m3_payload: dict[str, Any] = {
         "qa_report_json": _to_ui_path(m3_artifacts.qa_report_json),
@@ -439,6 +654,13 @@ def execute_youtube_dub_run(
         "output_dir": _to_ui_path(delivery.downloads_dir),
         "target_lang": target_lang,
         "video_resolution_requested": resolution_label,
+        "timing_summary": timing_summary,
+        "runtime_diagnostics": runtime_diagnostics,
+        "effective_realtime_factor": timing_summary.get("effective_realtime_factor"),
+        "subtitle_summary": subtitle_summary,
+        "translation_summary": translation_summary,
+        "tts_text_summary": tts_text_summary,
+        "qa_summary": qa_summary,
         "downloadables": _collect_downloadables([delivery.dubbed_video_mp4]),
         "stages": {
             "m1": {
@@ -510,15 +732,27 @@ def _update_job(
         current = JOB_STORE.get(job_id)
         if current is None:
             return None
+        next_status = status or current.status
+        next_progress = (
+            _clamp_percent(progress_percent)
+            if progress_percent is not None
+            else current.progress_percent
+        )
+        next_phase = phase or current.phase
+        if (
+            current.status == "running"
+            and next_status == "running"
+            and next_progress < current.progress_percent
+        ):
+            # Protect against late heartbeats from a previous stage overwriting
+            # the active stage progress/phase (seen as fake "stuck at M1").
+            next_progress = current.progress_percent
+            next_phase = current.phase
         updated = UIJob(
             job_id=current.job_id,
-            status=status or current.status,
-            progress_percent=(
-                _clamp_percent(progress_percent)
-                if progress_percent is not None
-                else current.progress_percent
-            ),
-            phase=phase or current.phase,
+            status=next_status,
+            progress_percent=next_progress,
+            phase=next_phase,
             created_at_utc=current.created_at_utc,
             updated_at_utc=_utc_now_iso(),
             result=result if result is not None else current.result,
@@ -763,6 +997,7 @@ video-translate run-dub --url "https://www.youtube.com/watch?v=VIDEO_ID" --confi
         <div class="field">
           <label>Video Cozunurluk (YouTube indirme tavani)</label>
           <select id="ytVideoResolution">
+            <option value="480">480p</option>
             <option value="720">720p</option>
             <option value="1080" selected>1080p (onerilen)</option>
             <option value="1440">1440p</option>
@@ -770,9 +1005,28 @@ video-translate run-dub --url "https://www.youtube.com/watch?v=VIDEO_ID" --confi
             <option value="source">Kaynak (otomatik)</option>
           </select>
         </div>
+        <div class="field">
+          <label>Calisma Modu</label>
+          <select id="processingMode">
+            <option value="fast">Hizli</option>
+            <option value="balanced" selected>Dengeli (onerilen)</option>
+            <option value="quality">Kalite</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Subtitle Stratejisi</label>
+          <select id="subtitleMode">
+            <option value="hybrid" selected>Hibrit (onerilen)</option>
+            <option value="subtitle_primary">Altyazi Once</option>
+            <option value="asr_primary">ASR Once</option>
+          </select>
+        </div>
       </div>
       <label class="check"><input id="ytEmitSrt" type="checkbox" checked /> M1 transcript SRT uret</label>
       <label class="check"><input id="ytRunM3" type="checkbox" checked disabled /> M3 (TTS dublaj) zorunlu</label>
+      <label class="check"><input id="useYoutubeSubtitles" type="checkbox" checked /> YouTube altyazilarini kullan (varsa)</label>
+      <label class="check"><input id="allowAutoSubtitles" type="checkbox" checked /> Otomatik altyaziya izin ver</label>
+      <label class="check"><input id="enableWhisperxAlignment" type="checkbox" /> WhisperX hizalama (opsiyonel, kalite modu)</label>
       <label class="check"><input id="cleanupIntermediate" type="checkbox" checked /> Ara dosyalari temizle</label>
       <div class="actions">
         <button id="youtubeRunBtn">YouTube'dan Dublaj Baslat</button>
@@ -1024,7 +1278,12 @@ video-translate run-dub --url "https://www.youtube.com/watch?v=VIDEO_ID" --confi
       body.set("emit_srt", document.getElementById("ytEmitSrt").checked ? "1" : "0");
       body.set("target_lang", document.getElementById("ytTargetLang").value.trim());
       body.set("video_resolution", document.getElementById("ytVideoResolution").value);
+      body.set("processing_mode", document.getElementById("processingMode").value);
+      body.set("subtitle_mode", document.getElementById("subtitleMode").value);
       body.set("run_m3", document.getElementById("ytRunM3").checked ? "1" : "0");
+      body.set("use_youtube_subtitles", document.getElementById("useYoutubeSubtitles").checked ? "1" : "0");
+      body.set("allow_auto_subtitles", document.getElementById("allowAutoSubtitles").checked ? "1" : "0");
+      body.set("enable_whisperx_alignment", document.getElementById("enableWhisperxAlignment").checked ? "1" : "0");
       body.set("cleanup_intermediate", document.getElementById("cleanupIntermediate").checked ? "1" : "0");
 
       setYoutubeRunningState(0, "Islem baslatiliyor...");
@@ -1177,6 +1436,11 @@ def _build_handler() -> type[BaseHTTPRequestHandler]:
                         run_m3=_pick(form, "run_m3", "1") == "1",
                         max_video_height=_as_opt_video_resolution(form, "video_resolution"),
                         cleanup_intermediate=_pick(form, "cleanup_intermediate", "1") == "1",
+                        processing_mode=_pick(form, "processing_mode", "balanced"),
+                        subtitle_mode=_pick(form, "subtitle_mode", "hybrid"),
+                        use_youtube_subtitles=_pick(form, "use_youtube_subtitles", "1") == "1",
+                        allow_auto_subtitles=_pick(form, "allow_auto_subtitles", "1") == "1",
+                        enable_whisperx_alignment=_pick(form, "enable_whisperx_alignment", "0") == "1",
                     )
                     result = start_youtube_job(request)
             except Exception as exc:  # noqa: BLE001
@@ -1260,4 +1524,3 @@ def run_ui_server(host: str, port: int) -> None:
         server.serve_forever(poll_interval=0.2)
     finally:
         server.server_close()
-
