@@ -954,7 +954,7 @@ def _html_page() -> str:
       <p>YouTube linkinden dogrudan EN->TR dublaj uretimi icin ana operasyon ekrani.</p>
       <div class="focus">
         <strong>Ana Is Akisi:</strong> Asagidaki `YouTube URL` alanina linki yapistir ve
-        `YouTube'dan Dublaj Baslat` butonuna bas.
+        `Start Dubbing` butonuna bas.
       </div>
       <div class="panel">
         <pre>
@@ -1029,7 +1029,7 @@ video-translate run-dub --url "https://www.youtube.com/watch?v=VIDEO_ID" --confi
       <label class="check"><input id="enableWhisperxAlignment" type="checkbox" /> WhisperX hizalama (opsiyonel, kalite modu)</label>
       <label class="check"><input id="cleanupIntermediate" type="checkbox" checked /> Ara dosyalari temizle</label>
       <div class="actions">
-        <button id="youtubeRunBtn">YouTube'dan Dublaj Baslat</button>
+        <button id="youtubeRunBtn">Start Dubbing</button>
       </div>
       <div class="panel"><pre id="ytStatus">Hazir.</pre></div>
       <div class="panel">
